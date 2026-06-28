@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Fraud Watch Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#0f1117;--surface:#1a1d27;--surface2:#22263a;
+  --border:#2a2f45;--text:#e8ecf4;--muted:#7a82a0;
+  --accent:#4f8ef7;--green:#22c55e;--amber:#f59e0b;--red:#ef4444;
+  --red-soft:#7f1d1d;--amber-soft:#78350f;--green-soft:#14532d;
+  --font:'Inter',system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--font);
+  display:flex;height:100vh;overflow:hidden}
+
+/* Sidebar */
+#sidebar{width:220px;min-width:220px;background:var(--surface);
+  border-right:1px solid var(--border);display:flex;flex-direction:column;padding:0}
+.logo{padding:20px 18px 16px;border-bottom:1px solid var(--border)}
+.logo h2{font-size:15px;font-weight:700;color:var(--text);letter-spacing:.3px}
+.logo p{font-size:11px;color:var(--muted);margin-top:3px}
+.logo span{color:var(--red);font-weight:700}
+nav{flex:1;padding:12px 8px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;
+  border-radius:8px;cursor:pointer;font-size:13px;color:var(--muted);
+  transition:all .15s;margin-bottom:2px;border:none;background:none;width:100%;text-align:left}
+.nav-item:hover{background:var(--surface2);color:var(--text)}
+.nav-item.active{background:var(--accent);color:#fff;font-weight:600}
+.nav-item svg{width:16px;height:16px;flex-shrink:0}
+.alert-badge{margin-left:auto;background:var(--red);color:#fff;
+  border-radius:999px;font-size:10px;font-weight:700;padding:1px 6px}
+.sidebar-footer{padding:14px 16px;border-top:1px solid var(--border);
+  font-size:11px;color:var(--muted)}
+
+/* Main */
+#main{flex:1;overflow-y:auto;display:flex;flex-direction:column}
+.page-header{padding:20px 28px 0;border-bottom:1px solid var(--border)}
+.page-header h1{font-size:20px;font-weight:700;margin-bottom:4px}
+.page-header p{font-size:13px;color:var(--muted);padding-bottom:16px}
+.page-content{padding:24px 28px;flex:1}
+
+/* KPI cards */
+.kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:24px}
+.kpi-card{background:var(--surface);border:1px solid var(--border);
+  border-radius:12px;padding:16px 18px}
+.kpi-card .label{font-size:11px;color:var(--muted);font-weight:600;
+  text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px}
+.kpi-card .value{font-size:24px;font-weight:700;line-height:1}
+.kpi-card .sub{font-size:11px;color:var(--muted);margin-top:5px}
+.kpi-card.danger .value{color:var(--red)}
+.kpi-card.warn .value{color:var(--amber)}
+.kpi-card.ok .value{color:var(--green)}
+.kpi-card.accent .value{color:var(--accent)}
+
+/* Charts */
+.chart-row{display:grid;gap:14px;margin-bottom:14px}
+.chart-2{grid-template-columns:1fr 1fr}
+.chart-3{grid-template-columns:2fr 1fr}
+.chart-card{background:var(--surface);border:1px solid var(--border);
+  border-radius:12px;padding:18px}
+.chart-card h3{font-size:13px;font-weight:600;margin-bottom:4px}
+.chart-card p{font-size:11px;color:var(--muted);margin-bottom:14px}
+.chart-wrap{position:relative}
+canvas{max-height:230px}
+
+/* Tables */
+.data-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.data-table th{text-align:left;padding:8px 12px;color:var(--muted);
+  font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;
+  border-bottom:1px solid var(--border)}
+.data-table td{padding:9px 12px;border-bottom:1px solid var(--border)}
+.data-table tr:last-child td{border:none}
+.data-table tr:hover td{background:var(--surface2)}
+
+/* Badges */
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;
+  font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+.badge.Critical{background:var(--red-soft);color:var(--red)}
+.badge.Elevated{background:var(--amber-soft);color:var(--amber)}
+.badge.Normal{background:var(--green-soft);color:var(--green)}
+
+/* Alert cards */
+.alert-list{display:flex;flex-direction:column;gap:10px}
+.alert-card{background:var(--surface);border:1px solid var(--border);
+  border-radius:12px;padding:16px;cursor:pointer;transition:border-color .15s}
+.alert-card:hover{border-color:var(--accent)}
+.alert-card.Critical{border-left:3px solid var(--red)}
+.alert-card.Elevated{border-left:3px solid var(--amber)}
+.alert-card-header{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.alert-card-header .id{font-size:11px;font-weight:700;color:var(--muted)}
+.alert-card-header .bucket{font-size:14px;font-weight:600;flex:1}
+.alert-meta{display:flex;gap:18px;font-size:12px;color:var(--muted);margin-bottom:8px}
+.alert-meta b{color:var(--text)}
+.alert-reason{font-size:12px;color:var(--muted);line-height:1.5}
+
+/* Modal */
+#modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);
+  z-index:100;align-items:center;justify-content:center}
+#modal-overlay.open{display:flex}
+#modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  width:min(900px,92vw);max-height:85vh;overflow-y:auto;padding:28px}
+#modal h2{font-size:18px;font-weight:700;margin-bottom:6px}
+#modal .close-btn{position:sticky;top:0;float:right;background:var(--surface2);
+  border:none;color:var(--text);border-radius:8px;padding:6px 12px;
+  cursor:pointer;font-size:13px;z-index:1}
+.modal-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin:18px 0}
+.stat-box{background:var(--surface2);border-radius:10px;padding:14px}
+.stat-box .sl{font-size:11px;color:var(--muted);margin-bottom:6px;
+  text-transform:uppercase;font-weight:600;letter-spacing:.5px}
+.stat-box .sv{font-size:20px;font-weight:700}
+
+/* Tabs */
+.tab-bar{display:flex;gap:4px;background:var(--surface2);padding:4px;
+  border-radius:10px;margin-bottom:18px;width:fit-content}
+.tab-btn{padding:7px 16px;border-radius:7px;font-size:13px;
+  border:none;background:none;color:var(--muted);cursor:pointer;font-weight:500}
+.tab-btn.active{background:var(--surface);color:var(--text);font-weight:600}
+
+/* Scenario pills */
+.scenario-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px}
+.scenario-pill{background:var(--surface);border:1px solid var(--border);
+  border-radius:10px;padding:14px;border-left:3px solid var(--red)}
+.scenario-pill h4{font-size:12px;font-weight:700;color:var(--red);margin-bottom:4px}
+.scenario-pill .period{font-size:11px;color:var(--amber);margin-bottom:6px;font-weight:600}
+.scenario-pill p{font-size:11.5px;color:var(--muted);line-height:1.5}
+
+/* Responsive tweaks */
+@media(max-width:900px){.kpi-grid{grid-template-columns:repeat(3,1fr)}.chart-2,.chart-3{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<nav id="sidebar">
+  <div class="logo">
+    <h2>🛡 Fraud<span>Watch</span></h2>
+    <p>Risk Intelligence Dashboard</p>
+  </div>
+  <nav>
+    <button class="nav-item active" onclick="showPage('overview')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      Overview
+    </button>
+    <button class="nav-item" onclick="showPage('channels')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 014.79 9.1 19.79 19.79 0 011.72 2.48A2 2 0 013.68.5h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L7.91 8.15a16 16 0 006.13 6.13l1.01-1.02a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
+      Channels
+    </button>
+    <button class="nav-item" onclick="showPage('geography')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+      Geography
+    </button>
+    <button class="nav-item" onclick="showPage('segments')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+      Segments
+    </button>
+    <button class="nav-item" onclick="showPage('alerts')" id="nav-alerts">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+      Alerts
+      <span class="alert-badge" id="alert-count">5</span>
+    </button>
+  </nav>
+  <div class="sidebar-footer">
+    Data: May 29 – Jun 28, 2026<br>150,400 transactions
+  </div>
+</nav>
+
+<div id="main">
+
+<!-- OVERVIEW PAGE -->
+<div id="page-overview">
+  <div class="page-header">
+    <h1>Overview</h1>
+    <p>30-day fraud monitoring summary across all channels, geographies, and customer segments</p>
+  </div>
+  <div class="page-content">
+
+    <div class="kpi-grid">
+      <div class="kpi-card accent">
+        <div class="label">Total Transactions</div>
+        <div class="value" id="kpi-vol">—</div>
+        <div class="sub">May 29 – Jun 28, 2026</div>
+      </div>
+      <div class="kpi-card danger">
+        <div class="label">Suspected Fraud</div>
+        <div class="value" id="kpi-fraud">—</div>
+        <div class="sub" id="kpi-fr">—</div>
+      </div>
+      <div class="kpi-card warn">
+        <div class="label">Estimated Loss</div>
+        <div class="value" id="kpi-loss">—</div>
+        <div class="sub">From fraud transactions</div>
+      </div>
+      <div class="kpi-card">
+        <div class="label">Total Volume ($)</div>
+        <div class="value" id="kpi-amt">—</div>
+        <div class="sub">All transaction amounts</div>
+      </div>
+      <div class="kpi-card danger">
+        <div class="label">Active Alerts</div>
+        <div class="value" id="kpi-alerts">—</div>
+        <div class="sub" id="kpi-alert-sub">—</div>
+      </div>
+    </div>
+
+    <div class="scenario-grid" id="scenarios-container"></div>
+
+    <div class="chart-row chart-3">
+      <div class="chart-card">
+        <h3>Daily Transaction Volume vs Fraud</h3>
+        <p>30-day trend — fraud spikes highlight injected scenarios</p>
+        <div class="chart-wrap"><canvas id="chart-daily"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>Fraud Rate by Day (%)</h3>
+        <p>Daily fraud percentage — baseline ~1.4%</p>
+        <div class="chart-wrap"><canvas id="chart-fr-daily"></canvas></div>
+      </div>
+    </div>
+
+    <div class="chart-row chart-2">
+      <div class="chart-card">
+        <h3>Fraud by Channel</h3>
+        <p>Estimated fraud count per channel (30 days)</p>
+        <div class="chart-wrap"><canvas id="chart-ch-bar"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>Fraud by Segment</h3>
+        <p>Fraud count and rate by customer segment</p>
+        <div class="chart-wrap"><canvas id="chart-seg-bar"></canvas></div>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <h3>Top Alert Buckets</h3>
+      <p>Regions and channels with highest fraud rates — click any row for case view</p>
+      <table class="data-table" id="alert-summary-table"></table>
+    </div>
+  </div>
+</div>
+
+<!-- CHANNELS PAGE -->
+<div id="page-channels" style="display:none">
+  <div class="page-header">
+    <h1>Channel Drill-Down</h1>
+    <p>Fraud volume, rate, and trend per transaction channel</p>
+  </div>
+  <div class="page-content">
+    <div class="chart-row chart-2" style="margin-bottom:14px">
+      <div class="chart-card">
+        <h3>Fraud Rate by Channel (%)</h3>
+        <p>30-day aggregate fraud rate per channel</p>
+        <div class="chart-wrap"><canvas id="chart-ch-rate"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>Volume by Channel</h3>
+        <p>Total transactions per channel</p>
+        <div class="chart-wrap"><canvas id="chart-ch-vol"></canvas></div>
+      </div>
+    </div>
+
+    <div class="chart-card" style="margin-bottom:14px">
+      <h3>Daily Fraud Count by Channel</h3>
+      <p>Stacked view — hover to see per-channel breakdown</p>
+      <div class="chart-wrap"><canvas id="chart-ch-daily" style="max-height:220px"></canvas></div>
+    </div>
+
+    <div class="chart-card">
+      <h3>Channel Summary</h3>
+      <p>Aggregate metrics per channel — sort and compare fraud rates</p>
+      <table class="data-table" id="channel-table"></table>
+    </div>
+  </div>
+</div>
+
+<!-- GEOGRAPHY PAGE -->
+<div id="page-geography" style="display:none">
+  <div class="page-header">
+    <h1>Geography Drill-Down</h1>
+    <p>Fraud distribution by country and region — critical hotspots highlighted</p>
+  </div>
+  <div class="page-content">
+    <div class="chart-row chart-2" style="margin-bottom:14px">
+      <div class="chart-card">
+        <h3>Fraud Count by Country</h3>
+        <p>Top 10 countries by fraud volume</p>
+        <div class="chart-wrap"><canvas id="chart-country-bar"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>Fraud Rate by Country (%)</h3>
+        <p>Countries sorted by fraud rate — not just volume</p>
+        <div class="chart-wrap"><canvas id="chart-country-rate"></canvas></div>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <h3>Region Hotspot Table</h3>
+      <p>Top 20 regions by fraud count — click row for case view</p>
+      <table class="data-table" id="geo-table"></table>
+    </div>
+  </div>
+</div>
+
+<!-- SEGMENTS PAGE -->
+<div id="page-segments" style="display:none">
+  <div class="page-header">
+    <h1>Segment Drill-Down</h1>
+    <p>Fraud behavior across customer lifecycle segments</p>
+  </div>
+  <div class="page-content">
+    <div class="chart-row chart-2" style="margin-bottom:14px">
+      <div class="chart-card">
+        <h3>Fraud Rate by Segment (%)</h3>
+        <p>Higher-risk segments skew new and dormant accounts</p>
+        <div class="chart-wrap"><canvas id="chart-seg-rate"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>Fraud Volume by Segment</h3>
+        <p>Absolute fraud count — "regular" has high volume despite lower rate</p>
+        <div class="chart-wrap"><canvas id="chart-seg-vol"></canvas></div>
+      </div>
+    </div>
+
+    <div class="chart-card" style="margin-bottom:14px">
+      <h3>Daily Fraud Trend by Segment</h3>
+      <p>Cohort view — identify which segments drive spikes</p>
+      <div class="chart-wrap"><canvas id="chart-seg-daily" style="max-height:220px"></canvas></div>
+    </div>
+
+    <div class="chart-row chart-2">
+      <div class="chart-card">
+        <h3>Merchant Category Heatmap</h3>
+        <p>Fraud count by merchant category</p>
+        <div class="chart-wrap"><canvas id="chart-mc-bar"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>Segment Summary</h3>
+        <p>Full KPI breakdown by segment</p>
+        <table class="data-table" id="seg-table"></table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ALERTS PAGE -->
+<div id="page-alerts" style="display:none">
+  <div class="page-header">
+    <h1>Alert List & Investigation</h1>
+    <p>Active anomaly alerts — click any card to open the Case View with recent fraud transactions</p>
+  </div>
+  <div class="page-content">
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="filterAlerts('all',this)">All (5)</button>
+      <button class="tab-btn" onclick="filterAlerts('Critical',this)">🔴 Critical</button>
+      <button class="tab-btn" onclick="filterAlerts('Geography',this)">Geography</button>
+      <button class="tab-btn" onclick="filterAlerts('Channel',this)">Channel</button>
+      <button class="tab-btn" onclick="filterAlerts('Segment',this)">Segment</button>
+    </div>
+    <div class="alert-list" id="alert-list"></div>
+  </div>
+</div>
+
+</div><!-- /main -->
+
+<!-- CASE VIEW MODAL -->
+<div id="modal-overlay" onclick="closeModal(event)">
+<div id="modal">
+  <button class="close-btn" onclick="closeModal()">✕ Close</button>
+  <h2 id="modal-title">Case View</h2>
+  <p id="modal-sub" style="color:var(--muted);font-size:13px;margin-top:4px"></p>
+  <div class="modal-grid" id="modal-stats"></div>
+  <p style="font-size:13px;font-weight:600;margin-bottom:10px">Recent High-Risk Transactions</p>
+  <p id="modal-steps" style="font-size:12px;color:var(--amber);margin-bottom:14px;
+    background:var(--amber-soft);padding:10px 14px;border-radius:8px;line-height:1.6"></p>
+  <table class="data-table" id="modal-table"></table>
+</div>
+</div>
+
+<script>
+const D = {"kpis": {"total_volume": 150400, "total_fraud": 7667, "fraud_rate": 5.098, "total_amount": 47386150.19, "est_loss": 4049658.97, "n_critical": 5, "n_elevated": 0, "date_range": "May 29 \u2013 Jun 28, 2026"}, "daily": [{"date": "2026-05-29", "volume": 4871, "total_amount": 1447823.81, "fraud_count": 68, "avg_amount": 297.23, "fraud_rate": 1.396}, {"date": "2026-05-30", "volume": 4728, "total_amount": 1366687.16, "fraud_count": 64, "avg_amount": 289.06, "fraud_rate": 1.354}, {"date": "2026-05-31", "volume": 4708, "total_amount": 1416980.66, "fraud_count": 75, "avg_amount": 300.97, "fraud_rate": 1.593}, {"date": "2026-06-01", "volume": 4839, "total_amount": 1439292.15, "fraud_count": 86, "avg_amount": 297.44, "fraud_rate": 1.777}, {"date": "2026-06-02", "volume": 4792, "total_amount": 1492497.74, "fraud_count": 86, "avg_amount": 311.46, "fraud_rate": 1.795}, {"date": "2026-06-03", "volume": 4955, "total_amount": 1552538.07, "fraud_count": 72, "avg_amount": 313.33, "fraud_rate": 1.453}, {"date": "2026-06-04", "volume": 4786, "total_amount": 1477045.38, "fraud_count": 62, "avg_amount": 308.62, "fraud_rate": 1.295}, {"date": "2026-06-05", "volume": 4816, "total_amount": 1440581.6, "fraud_count": 70, "avg_amount": 299.12, "fraud_rate": 1.453}, {"date": "2026-06-06", "volume": 4849, "total_amount": 1462877.86, "fraud_count": 69, "avg_amount": 301.69, "fraud_rate": 1.423}, {"date": "2026-06-07", "volume": 4890, "total_amount": 1446969.57, "fraud_count": 72, "avg_amount": 295.9, "fraud_rate": 1.472}, {"date": "2026-06-08", "volume": 6243, "total_amount": 1461014.55, "fraud_count": 1486, "avg_amount": 234.02, "fraud_rate": 23.803}, {"date": "2026-06-09", "volume": 6280, "total_amount": 1495518.85, "fraud_count": 1477, "avg_amount": 238.14, "fraud_rate": 23.519}, {"date": "2026-06-10", "volume": 4854, "total_amount": 1469545.22, "fraud_count": 76, "avg_amount": 302.75, "fraud_rate": 1.566}, {"date": "2026-06-11", "volume": 4893, "total_amount": 1433808.98, "fraud_count": 75, "avg_amount": 293.03, "fraud_rate": 1.533}, {"date": "2026-06-12", "volume": 4802, "total_amount": 1458083.15, "fraud_count": 71, "avg_amount": 303.64, "fraud_rate": 1.479}, {"date": "2026-06-13", "volume": 4793, "total_amount": 1517155.4, "fraud_count": 61, "avg_amount": 316.54, "fraud_rate": 1.273}, {"date": "2026-06-14", "volume": 4811, "total_amount": 1435023.85, "fraud_count": 63, "avg_amount": 298.28, "fraud_rate": 1.309}, {"date": "2026-06-15", "volume": 4856, "total_amount": 1472294.71, "fraud_count": 83, "avg_amount": 303.19, "fraud_rate": 1.709}, {"date": "2026-06-16", "volume": 5191, "total_amount": 2123911.57, "fraud_count": 414, "avg_amount": 409.15, "fraud_rate": 7.975}, {"date": "2026-06-17", "volume": 5082, "total_amount": 2142350.97, "fraud_count": 437, "avg_amount": 421.56, "fraud_rate": 8.599}, {"date": "2026-06-18", "volume": 5205, "total_amount": 2201858.96, "fraud_count": 431, "avg_amount": 423.03, "fraud_rate": 8.28}, {"date": "2026-06-19", "volume": 5129, "total_amount": 2189211.0, "fraud_count": 413, "avg_amount": 426.83, "fraud_rate": 8.052}, {"date": "2026-06-20", "volume": 4841, "total_amount": 1500287.32, "fraud_count": 63, "avg_amount": 309.91, "fraud_rate": 1.301}, {"date": "2026-06-21", "volume": 4885, "total_amount": 1484615.69, "fraud_count": 81, "avg_amount": 303.91, "fraud_rate": 1.658}, {"date": "2026-06-22", "volume": 5018, "total_amount": 1555371.23, "fraud_count": 370, "avg_amount": 309.96, "fraud_rate": 7.373}, {"date": "2026-06-23", "volume": 5133, "total_amount": 1658417.58, "fraud_count": 375, "avg_amount": 323.09, "fraud_rate": 7.306}, {"date": "2026-06-24", "volume": 5258, "total_amount": 1702828.35, "fraud_count": 407, "avg_amount": 323.85, "fraud_rate": 7.741}, {"date": "2026-06-25", "volume": 5092, "total_amount": 1583374.77, "fraud_count": 385, "avg_amount": 310.95, "fraud_rate": 7.561}, {"date": "2026-06-26", "volume": 4806, "total_amount": 1493854.11, "fraud_count": 97, "avg_amount": 310.83, "fraud_rate": 2.018}, {"date": "2026-06-27", "volume": 4994, "total_amount": 1464329.93, "fraud_count": 78, "avg_amount": 293.22, "fraud_rate": 1.562}], "ch_summary": [{"channel": "api", "volume": 10190, "fraud_count": 91, "total_amount": 3144772.65, "avg_amount": 308.61, "fraud_rate": 0.893, "alert_level": "Normal"}, {"channel": "call_center", "volume": 12768, "fraud_count": 1509, "total_amount": 4126504.0, "avg_amount": 323.19, "fraud_rate": 11.819, "alert_level": "Normal"}, {"channel": "mobile", "volume": 53414, "fraud_count": 3549, "total_amount": 15470738.27, "avg_amount": 289.64, "fraud_rate": 6.644, "alert_level": "Normal"}, {"channel": "pos", "volume": 29055, "fraud_count": 201, "total_amount": 8776072.91, "avg_amount": 302.05, "fraud_rate": 0.692, "alert_level": "Normal"}, {"channel": "web", "volume": 44973, "fraud_count": 2317, "total_amount": 15868062.36, "avg_amount": 352.84, "fraud_rate": 5.152, "alert_level": "Normal"}], "ch_daily": [{"date": "2026-05-29", "channel": "api", "volume": 301, "fraud_count": 4, "total_amount": 90845.79, "fraud_rate": 1.329}, {"date": "2026-05-29", "channel": "call_center", "volume": 421, "fraud_count": 9, "total_amount": 126299.05, "fraud_rate": 2.138}, {"date": "2026-05-29", "channel": "mobile", "volume": 1763, "fraud_count": 26, "total_amount": 537965.11, "fraud_rate": 1.475}, {"date": "2026-05-29", "channel": "pos", "volume": 1005, "fraud_count": 6, "total_amount": 301747.33, "fraud_rate": 0.597}, {"date": "2026-05-29", "channel": "web", "volume": 1381, "fraud_count": 23, "total_amount": 390966.53, "fraud_rate": 1.665}, {"date": "2026-05-30", "channel": "api", "volume": 294, "fraud_count": 1, "total_amount": 80033.66, "fraud_rate": 0.34}, {"date": "2026-05-30", "channel": "call_center", "volume": 383, "fraud_count": 7, "total_amount": 102140.08, "fraud_rate": 1.828}, {"date": "2026-05-30", "channel": "mobile", "volume": 1720, "fraud_count": 25, "total_amount": 521348.45, "fraud_rate": 1.453}, {"date": "2026-05-30", "channel": "pos", "volume": 896, "fraud_count": 4, "total_amount": 245674.1, "fraud_rate": 0.446}, {"date": "2026-05-30", "channel": "web", "volume": 1435, "fraud_count": 27, "total_amount": 417490.87, "fraud_rate": 1.882}, {"date": "2026-05-31", "channel": "api", "volume": 303, "fraud_count": 5, "total_amount": 96953.86, "fraud_rate": 1.65}, {"date": "2026-05-31", "channel": "call_center", "volume": 343, "fraud_count": 6, "total_amount": 93360.26, "fraud_rate": 1.749}, {"date": "2026-05-31", "channel": "mobile", "volume": 1643, "fraud_count": 25, "total_amount": 500511.85, "fraud_rate": 1.522}, {"date": "2026-05-31", "channel": "pos", "volume": 971, "fraud_count": 11, "total_amount": 294860.38, "fraud_rate": 1.133}, {"date": "2026-05-31", "channel": "web", "volume": 1448, "fraud_count": 28, "total_amount": 431294.31, "fraud_rate": 1.934}, {"date": "2026-06-01", "channel": "api", "volume": 346, "fraud_count": 1, "total_amount": 107017.7, "fraud_rate": 0.289}, {"date": "2026-06-01", "channel": "call_center", "volume": 371, "fraud_count": 13, "total_amount": 104194.49, "fraud_rate": 3.504}, {"date": "2026-06-01", "channel": "mobile", "volume": 1714, "fraud_count": 27, "total_amount": 524071.14, "fraud_rate": 1.575}, {"date": "2026-06-01", "channel": "pos", "volume": 972, "fraud_count": 10, "total_amount": 282382.91, "fraud_rate": 1.029}, {"date": "2026-06-01", "channel": "web", "volume": 1436, "fraud_count": 35, "total_amount": 421625.91, "fraud_rate": 2.437}, {"date": "2026-06-02", "channel": "api", "volume": 320, "fraud_count": 4, "total_amount": 87453.01, "fraud_rate": 1.25}, {"date": "2026-06-02", "channel": "call_center", "volume": 379, "fraud_count": 12, "total_amount": 130942.77, "fraud_rate": 3.166}, {"date": "2026-06-02", "channel": "mobile", "volume": 1710, "fraud_count": 33, "total_amount": 533560.34, "fraud_rate": 1.93}, {"date": "2026-06-02", "channel": "pos", "volume": 946, "fraud_count": 6, "total_amount": 323772.9, "fraud_rate": 0.634}, {"date": "2026-06-02", "channel": "web", "volume": 1437, "fraud_count": 31, "total_amount": 416768.72, "fraud_rate": 2.157}, {"date": "2026-06-03", "channel": "api", "volume": 379, "fraud_count": 6, "total_amount": 132681.26, "fraud_rate": 1.583}, {"date": "2026-06-03", "channel": "call_center", "volume": 365, "fraud_count": 12, "total_amount": 115932.81, "fraud_rate": 3.288}, {"date": "2026-06-03", "channel": "mobile", "volume": 1711, "fraud_count": 27, "total_amount": 538829.74, "fraud_rate": 1.578}, {"date": "2026-06-03", "channel": "pos", "volume": 1021, "fraud_count": 3, "total_amount": 330502.21, "fraud_rate": 0.294}, {"date": "2026-06-03", "channel": "web", "volume": 1479, "fraud_count": 24, "total_amount": 434592.05, "fraud_rate": 1.623}, {"date": "2026-06-04", "channel": "api", "volume": 349, "fraud_count": 1, "total_amount": 110660.27, "fraud_rate": 0.287}, {"date": "2026-06-04", "channel": "call_center", "volume": 377, "fraud_count": 6, "total_amount": 112453.32, "fraud_rate": 1.592}, {"date": "2026-06-04", "channel": "mobile", "volume": 1668, "fraud_count": 23, "total_amount": 527030.48, "fraud_rate": 1.379}, {"date": "2026-06-04", "channel": "pos", "volume": 934, "fraud_count": 7, "total_amount": 278150.44, "fraud_rate": 0.749}, {"date": "2026-06-04", "channel": "web", "volume": 1458, "fraud_count": 25, "total_amount": 448750.87, "fraud_rate": 1.715}, {"date": "2026-06-05", "channel": "api", "volume": 351, "fraud_count": 2, "total_amount": 102671.84, "fraud_rate": 0.57}, {"date": "2026-06-05", "channel": "call_center", "volume": 380, "fraud_count": 6, "total_amount": 128306.82, "fraud_rate": 1.579}, {"date": "2026-06-05", "channel": "mobile", "volume": 1676, "fraud_count": 23, "total_amount": 503111.81, "fraud_rate": 1.372}, {"date": "2026-06-05", "channel": "pos", "volume": 940, "fraud_count": 7, "total_amount": 269998.52, "fraud_rate": 0.745}, {"date": "2026-06-05", "channel": "web", "volume": 1469, "fraud_count": 32, "total_amount": 436492.61, "fraud_rate": 2.178}, {"date": "2026-06-06", "channel": "api", "volume": 348, "fraud_count": 5, "total_amount": 117589.4, "fraud_rate": 1.437}, {"date": "2026-06-06", "channel": "call_center", "volume": 391, "fraud_count": 5, "total_amount": 111439.33, "fraud_rate": 1.279}, {"date": "2026-06-06", "channel": "mobile", "volume": 1585, "fraud_count": 21, "total_amount": 489437.02, "fraud_rate": 1.325}, {"date": "2026-06-06", "channel": "pos", "volume": 1010, "fraud_count": 10, "total_amount": 302187.62, "fraud_rate": 0.99}, {"date": "2026-06-06", "channel": "web", "volume": 1515, "fraud_count": 28, "total_amount": 442224.49, "fraud_rate": 1.848}, {"date": "2026-06-07", "channel": "api", "volume": 322, "fraud_count": 3, "total_amount": 99612.8, "fraud_rate": 0.932}, {"date": "2026-06-07", "channel": "call_center", "volume": 396, "fraud_count": 7, "total_amount": 120030.59, "fraud_rate": 1.768}, {"date": "2026-06-07", "channel": "mobile", "volume": 1701, "fraud_count": 21, "total_amount": 484785.09, "fraud_rate": 1.235}, {"date": "2026-06-07", "channel": "pos", "volume": 985, "fraud_count": 6, "total_amount": 301730.8, "fraud_rate": 0.609}, {"date": "2026-06-07", "channel": "web", "volume": 1486, "fraud_count": 35, "total_amount": 440810.29, "fraud_rate": 2.355}, {"date": "2026-06-08", "channel": "api", "volume": 360, "fraud_count": 6, "total_amount": 127029.25, "fraud_rate": 1.667}, {"date": "2026-06-08", "channel": "call_center", "volume": 384, "fraud_count": 7, "total_amount": 115851.5, "fraud_rate": 1.823}, {"date": "2026-06-08", "channel": "mobile", "volume": 3157, "fraud_count": 1425, "total_amount": 564149.17, "fraud_rate": 45.138}, {"date": "2026-06-08", "channel": "pos", "volume": 937, "fraud_count": 14, "total_amount": 251807.5, "fraud_rate": 1.494}, {"date": "2026-06-08", "channel": "web", "volume": 1405, "fraud_count": 34, "total_amount": 402177.13, "fraud_rate": 2.42}, {"date": "2026-06-09", "channel": "api", "volume": 327, "fraud_count": 6, "total_amount": 91851.65, "fraud_rate": 1.835}, {"date": "2026-06-09", "channel": "call_center", "volume": 410, "fraud_count": 12, "total_amount": 118286.64, "fraud_rate": 2.927}, {"date": "2026-06-09", "channel": "mobile", "volume": 3109, "fraud_count": 1423, "total_amount": 528216.97, "fraud_rate": 45.77}, {"date": "2026-06-09", "channel": "pos", "volume": 1045, "fraud_count": 7, "total_amount": 314939.39, "fraud_rate": 0.67}, {"date": "2026-06-09", "channel": "web", "volume": 1389, "fraud_count": 29, "total_amount": 442224.2, "fraud_rate": 2.088}, {"date": "2026-06-10", "channel": "api", "volume": 358, "fraud_count": 6, "total_amount": 111823.14, "fraud_rate": 1.676}, {"date": "2026-06-10", "channel": "call_center", "volume": 375, "fraud_count": 14, "total_amount": 114396.34, "fraud_rate": 3.733}, {"date": "2026-06-10", "channel": "mobile", "volume": 1689, "fraud_count": 29, "total_amount": 479794.56, "fraud_rate": 1.717}, {"date": "2026-06-10", "channel": "pos", "volume": 1035, "fraud_count": 4, "total_amount": 318339.68, "fraud_rate": 0.386}, {"date": "2026-06-10", "channel": "web", "volume": 1397, "fraud_count": 23, "total_amount": 445191.5, "fraud_rate": 1.646}, {"date": "2026-06-11", "channel": "api", "volume": 339, "fraud_count": 2, "total_amount": 100490.37, "fraud_rate": 0.59}, {"date": "2026-06-11", "channel": "call_center", "volume": 418, "fraud_count": 15, "total_amount": 134364.86, "fraud_rate": 3.589}, {"date": "2026-06-11", "channel": "mobile", "volume": 1740, "fraud_count": 24, "total_amount": 496937.83, "fraud_rate": 1.379}, {"date": "2026-06-11", "channel": "pos", "volume": 943, "fraud_count": 5, "total_amount": 286467.55, "fraud_rate": 0.53}, {"date": "2026-06-11", "channel": "web", "volume": 1453, "fraud_count": 29, "total_amount": 415548.37, "fraud_rate": 1.996}, {"date": "2026-06-12", "channel": "api", "volume": 370, "fraud_count": 3, "total_amount": 110419.13, "fraud_rate": 0.811}, {"date": "2026-06-12", "channel": "call_center", "volume": 393, "fraud_count": 7, "total_amount": 107844.72, "fraud_rate": 1.781}, {"date": "2026-06-12", "channel": "mobile", "volume": 1634, "fraud_count": 24, "total_amount": 479169.21, "fraud_rate": 1.469}, {"date": "2026-06-12", "channel": "pos", "volume": 978, "fraud_count": 10, "total_amount": 336637.82, "fraud_rate": 1.022}, {"date": "2026-06-12", "channel": "web", "volume": 1427, "fraud_count": 27, "total_amount": 424012.27, "fraud_rate": 1.892}, {"date": "2026-06-13", "channel": "api", "volume": 353, "fraud_count": 2, "total_amount": 101559.48, "fraud_rate": 0.567}, {"date": "2026-06-13", "channel": "call_center", "volume": 379, "fraud_count": 3, "total_amount": 135472.48, "fraud_rate": 0.792}, {"date": "2026-06-13", "channel": "mobile", "volume": 1644, "fraud_count": 21, "total_amount": 509851.15, "fraud_rate": 1.277}, {"date": "2026-06-13", "channel": "pos", "volume": 985, "fraud_count": 4, "total_amount": 318092.29, "fraud_rate": 0.406}, {"date": "2026-06-13", "channel": "web", "volume": 1432, "fraud_count": 31, "total_amount": 452180.0, "fraud_rate": 2.165}, {"date": "2026-06-14", "channel": "api", "volume": 322, "fraud_count": 1, "total_amount": 100277.52, "fraud_rate": 0.311}, {"date": "2026-06-14", "channel": "call_center", "volume": 379, "fraud_count": 15, "total_amount": 113828.76, "fraud_rate": 3.958}, {"date": "2026-06-14", "channel": "mobile", "volume": 1670, "fraud_count": 24, "total_amount": 509112.61, "fraud_rate": 1.437}, {"date": "2026-06-14", "channel": "pos", "volume": 952, "fraud_count": 5, "total_amount": 259925.51, "fraud_rate": 0.525}, {"date": "2026-06-14", "channel": "web", "volume": 1488, "fraud_count": 18, "total_amount": 451879.45, "fraud_rate": 1.21}, {"date": "2026-06-15", "channel": "api", "volume": 348, "fraud_count": 4, "total_amount": 98176.51, "fraud_rate": 1.149}, {"date": "2026-06-15", "channel": "call_center", "volume": 365, "fraud_count": 11, "total_amount": 106893.71, "fraud_rate": 3.014}, {"date": "2026-06-15", "channel": "mobile", "volume": 1702, "fraud_count": 34, "total_amount": 537697.19, "fraud_rate": 1.998}, {"date": "2026-06-15", "channel": "pos", "volume": 966, "fraud_count": 5, "total_amount": 298543.36, "fraud_rate": 0.518}, {"date": "2026-06-15", "channel": "web", "volume": 1475, "fraud_count": 29, "total_amount": 430983.94, "fraud_rate": 1.966}, {"date": "2026-06-16", "channel": "api", "volume": 373, "fraud_count": 1, "total_amount": 137155.45, "fraud_rate": 0.268}, {"date": "2026-06-16", "channel": "call_center", "volume": 409, "fraud_count": 14, "total_amount": 117997.75, "fraud_rate": 3.423}, {"date": "2026-06-16", "channel": "mobile", "volume": 1658, "fraud_count": 22, "total_amount": 507548.86, "fraud_rate": 1.327}, {"date": "2026-06-16", "channel": "pos", "volume": 951, "fraud_count": 6, "total_amount": 274513.82, "fraud_rate": 0.631}, {"date": "2026-06-16", "channel": "web", "volume": 1800, "fraud_count": 371, "total_amount": 1086695.69, "fraud_rate": 20.611}, {"date": "2026-06-17", "channel": "api", "volume": 306, "fraud_count": 2, "total_amount": 91792.29, "fraud_rate": 0.654}, {"date": "2026-06-17", "channel": "call_center", "volume": 350, "fraud_count": 9, "total_amount": 92042.91, "fraud_rate": 2.571}, {"date": "2026-06-17", "channel": "mobile", "volume": 1670, "fraud_count": 27, "total_amount": 520867.2, "fraud_rate": 1.617}, {"date": "2026-06-17", "channel": "pos", "volume": 990, "fraud_count": 3, "total_amount": 301078.89, "fraud_rate": 0.303}, {"date": "2026-06-17", "channel": "web", "volume": 1766, "fraud_count": 396, "total_amount": 1136569.68, "fraud_rate": 22.424}, {"date": "2026-06-18", "channel": "api", "volume": 318, "fraud_count": 0, "total_amount": 89582.79, "fraud_rate": 0.0}, {"date": "2026-06-18", "channel": "call_center", "volume": 409, "fraud_count": 9, "total_amount": 121462.32, "fraud_rate": 2.2}, {"date": "2026-06-18", "channel": "mobile", "volume": 1622, "fraud_count": 23, "total_amount": 489499.07, "fraud_rate": 1.418}, {"date": "2026-06-18", "channel": "pos", "volume": 989, "fraud_count": 5, "total_amount": 289057.49, "fraud_rate": 0.506}, {"date": "2026-06-18", "channel": "web", "volume": 1867, "fraud_count": 394, "total_amount": 1212257.29, "fraud_rate": 21.103}, {"date": "2026-06-19", "channel": "api", "volume": 328, "fraud_count": 1, "total_amount": 118005.03, "fraud_rate": 0.305}, {"date": "2026-06-19", "channel": "call_center", "volume": 363, "fraud_count": 8, "total_amount": 108504.31, "fraud_rate": 2.204}, {"date": "2026-06-19", "channel": "mobile", "volume": 1718, "fraud_count": 24, "total_amount": 531919.95, "fraud_rate": 1.397}, {"date": "2026-06-19", "channel": "pos", "volume": 957, "fraud_count": 7, "total_amount": 283825.91, "fraud_rate": 0.731}, {"date": "2026-06-19", "channel": "web", "volume": 1763, "fraud_count": 373, "total_amount": 1146955.8, "fraud_rate": 21.157}, {"date": "2026-06-20", "channel": "api", "volume": 355, "fraud_count": 1, "total_amount": 115843.61, "fraud_rate": 0.282}, {"date": "2026-06-20", "channel": "call_center", "volume": 396, "fraud_count": 12, "total_amount": 117527.11, "fraud_rate": 3.03}, {"date": "2026-06-20", "channel": "mobile", "volume": 1703, "fraud_count": 23, "total_amount": 537689.79, "fraud_rate": 1.351}, {"date": "2026-06-20", "channel": "pos", "volume": 948, "fraud_count": 7, "total_amount": 288647.11, "fraud_rate": 0.738}, {"date": "2026-06-20", "channel": "web", "volume": 1439, "fraud_count": 20, "total_amount": 440579.7, "fraud_rate": 1.39}, {"date": "2026-06-21", "channel": "api", "volume": 338, "fraud_count": 2, "total_amount": 105995.48, "fraud_rate": 0.592}, {"date": "2026-06-21", "channel": "call_center", "volume": 393, "fraud_count": 17, "total_amount": 98445.1, "fraud_rate": 4.326}, {"date": "2026-06-21", "channel": "mobile", "volume": 1740, "fraud_count": 24, "total_amount": 557667.36, "fraud_rate": 1.379}, {"date": "2026-06-21", "channel": "pos", "volume": 952, "fraud_count": 4, "total_amount": 296460.82, "fraud_rate": 0.42}, {"date": "2026-06-21", "channel": "web", "volume": 1462, "fraud_count": 34, "total_amount": 426046.93, "fraud_rate": 2.326}, {"date": "2026-06-22", "channel": "api", "volume": 359, "fraud_count": 7, "total_amount": 101562.9, "fraud_rate": 1.95}, {"date": "2026-06-22", "channel": "call_center", "volume": 650, "fraud_count": 295, "total_amount": 264353.12, "fraud_rate": 45.385}, {"date": "2026-06-22", "channel": "mobile", "volume": 1651, "fraud_count": 24, "total_amount": 506035.07, "fraud_rate": 1.454}, {"date": "2026-06-22", "channel": "pos", "volume": 943, "fraud_count": 8, "total_amount": 275041.33, "fraud_rate": 0.848}, {"date": "2026-06-22", "channel": "web", "volume": 1415, "fraud_count": 36, "total_amount": 408378.81, "fraud_rate": 2.544}, {"date": "2026-06-23", "channel": "api", "volume": 346, "fraud_count": 3, "total_amount": 99225.24, "fraud_rate": 0.867}, {"date": "2026-06-23", "channel": "call_center", "volume": 704, "fraud_count": 323, "total_amount": 292648.57, "fraud_rate": 45.881}, {"date": "2026-06-23", "channel": "mobile", "volume": 1667, "fraud_count": 21, "total_amount": 500122.56, "fraud_rate": 1.26}, {"date": "2026-06-23", "channel": "pos", "volume": 943, "fraud_count": 5, "total_amount": 271644.71, "fraud_rate": 0.53}, {"date": "2026-06-23", "channel": "web", "volume": 1473, "fraud_count": 23, "total_amount": 494776.5, "fraud_rate": 1.561}, {"date": "2026-06-24", "channel": "api", "volume": 347, "fraud_count": 4, "total_amount": 107441.63, "fraud_rate": 1.153}, {"date": "2026-06-24", "channel": "call_center", "volume": 726, "fraud_count": 318, "total_amount": 312506.22, "fraud_rate": 43.802}, {"date": "2026-06-24", "channel": "mobile", "volume": 1712, "fraud_count": 35, "total_amount": 508697.61, "fraud_rate": 2.044}, {"date": "2026-06-24", "channel": "pos", "volume": 994, "fraud_count": 7, "total_amount": 302649.03, "fraud_rate": 0.704}, {"date": "2026-06-24", "channel": "web", "volume": 1479, "fraud_count": 43, "total_amount": 471533.86, "fraud_rate": 2.907}, {"date": "2026-06-25", "channel": "api", "volume": 337, "fraud_count": 0, "total_amount": 94880.34, "fraud_rate": 0.0}, {"date": "2026-06-25", "channel": "call_center", "volume": 719, "fraud_count": 315, "total_amount": 296508.77, "fraud_rate": 43.811}, {"date": "2026-06-25", "channel": "mobile", "volume": 1628, "fraud_count": 20, "total_amount": 485841.26, "fraud_rate": 1.229}, {"date": "2026-06-25", "channel": "pos", "volume": 906, "fraud_count": 8, "total_amount": 270530.68, "fraud_rate": 0.883}, {"date": "2026-06-25", "channel": "web", "volume": 1502, "fraud_count": 42, "total_amount": 435613.72, "fraud_rate": 2.796}, {"date": "2026-06-26", "channel": "api", "volume": 356, "fraud_count": 6, "total_amount": 118041.54, "fraud_rate": 1.685}, {"date": "2026-06-26", "channel": "call_center", "volume": 353, "fraud_count": 15, "total_amount": 102999.35, "fraud_rate": 4.249}, {"date": "2026-06-26", "channel": "mobile", "volume": 1644, "fraud_count": 25, "total_amount": 522230.11, "fraud_rate": 1.521}, {"date": "2026-06-26", "channel": "pos", "volume": 965, "fraud_count": 10, "total_amount": 305052.21, "fraud_rate": 1.036}, {"date": "2026-06-26", "channel": "web", "volume": 1488, "fraud_count": 41, "total_amount": 445530.9, "fraud_rate": 2.755}, {"date": "2026-06-27", "channel": "api", "volume": 337, "fraud_count": 2, "total_amount": 98099.71, "fraud_rate": 0.593}, {"date": "2026-06-27", "channel": "call_center", "volume": 387, "fraud_count": 7, "total_amount": 109469.94, "fraud_rate": 1.809}, {"date": "2026-06-27", "channel": "mobile", "volume": 1765, "fraud_count": 26, "total_amount": 537039.71, "fraud_rate": 1.473}, {"date": "2026-06-27", "channel": "pos", "volume": 996, "fraud_count": 7, "total_amount": 301810.6, "fraud_rate": 0.703}, {"date": "2026-06-27", "channel": "web", "volume": 1509, "fraud_count": 36, "total_amount": 417909.97, "fraud_rate": 2.386}], "geo": [{"country": "RO", "region": "Cluj", "volume": 2021, "fraud_count": 601, "total_amount": 441005.69, "avg_amount": 218.21, "fraud_rate": 29.738, "alert_level": "Critical"}, {"country": "RO", "region": "Iasi", "volume": 2018, "fraud_count": 598, "total_amount": 430952.8, "avg_amount": 213.55, "fraud_rate": 29.633, "alert_level": "Critical"}, {"country": "RO", "region": "Bucharest", "volume": 2040, "fraud_count": 587, "total_amount": 450115.2, "avg_amount": 220.64, "fraud_rate": 28.775, "alert_level": "Critical"}, {"country": "RO", "region": "Timisoara", "volume": 2034, "fraud_count": 581, "total_amount": 465914.34, "avg_amount": 229.06, "fraud_rate": 28.564, "alert_level": "Critical"}, {"country": "RO", "region": "Constanta", "volume": 2076, "fraud_count": 545, "total_amount": 470766.81, "avg_amount": 226.77, "fraud_rate": 26.252, "alert_level": "Critical"}, {"country": "UK", "region": "Wales", "volume": 4562, "fraud_count": 231, "total_amount": 1635494.35, "avg_amount": 358.5, "fraud_rate": 5.064, "alert_level": "Normal"}, {"country": "UK", "region": "Midlands", "volume": 4475, "fraud_count": 224, "total_amount": 1612323.02, "avg_amount": 360.3, "fraud_rate": 5.006, "alert_level": "Normal"}, {"country": "UK", "region": "London", "volume": 4562, "fraud_count": 219, "total_amount": 1622988.88, "avg_amount": 355.76, "fraud_rate": 4.801, "alert_level": "Normal"}, {"country": "UK", "region": "North England", "volume": 4423, "fraud_count": 202, "total_amount": 1568609.16, "avg_amount": 354.65, "fraud_rate": 4.567, "alert_level": "Normal"}, {"country": "DE", "region": "NRW", "volume": 3017, "fraud_count": 200, "total_amount": 1165949.78, "avg_amount": 386.46, "fraud_rate": 6.629, "alert_level": "Normal"}, {"country": "UK", "region": "Scotland", "volume": 4554, "fraud_count": 191, "total_amount": 1582726.64, "avg_amount": 347.55, "fraud_rate": 4.194, "alert_level": "Normal"}, {"country": "DE", "region": "Hamburg", "volume": 2986, "fraud_count": 190, "total_amount": 1140194.25, "avg_amount": 381.85, "fraud_rate": 6.363, "alert_level": "Normal"}, {"country": "DE", "region": "Saxony", "volume": 3033, "fraud_count": 183, "total_amount": 1137334.98, "avg_amount": 374.99, "fraud_rate": 6.034, "alert_level": "Normal"}, {"country": "DE", "region": "Bavaria", "volume": 3110, "fraud_count": 183, "total_amount": 1236291.01, "avg_amount": 397.52, "fraud_rate": 5.884, "alert_level": "Normal"}, {"country": "DE", "region": "Berlin", "volume": 3014, "fraud_count": 162, "total_amount": 1149412.62, "avg_amount": 381.36, "fraud_rate": 5.375, "alert_level": "Normal"}, {"country": "US", "region": "Northeast", "volume": 8546, "fraud_count": 153, "total_amount": 2620526.41, "avg_amount": 306.64, "fraud_rate": 1.79, "alert_level": "Normal"}, {"country": "US", "region": "Southeast", "volume": 8668, "fraud_count": 146, "total_amount": 2641319.33, "avg_amount": 304.72, "fraud_rate": 1.684, "alert_level": "Normal"}, {"country": "US", "region": "West", "volume": 8709, "fraud_count": 140, "total_amount": 2561280.53, "avg_amount": 294.1, "fraud_rate": 1.608, "alert_level": "Normal"}, {"country": "BR", "region": "Minas Gerais", "volume": 2377, "fraud_count": 136, "total_amount": 751581.64, "avg_amount": 316.19, "fraud_rate": 5.721, "alert_level": "Normal"}, {"country": "US", "region": "Southwest", "volume": 8929, "fraud_count": 133, "total_amount": 2740522.08, "avg_amount": 306.92, "fraud_rate": 1.49, "alert_level": "Normal"}, {"country": "NG", "region": "Kano", "volume": 1553, "fraud_count": 130, "total_amount": 501469.09, "avg_amount": 322.9, "fraud_rate": 8.371, "alert_level": "Normal"}, {"country": "US", "region": "Midwest", "volume": 8726, "fraud_count": 128, "total_amount": 2653328.55, "avg_amount": 304.07, "fraud_rate": 1.467, "alert_level": "Normal"}, {"country": "BR", "region": "Bahia", "volume": 2374, "fraud_count": 128, "total_amount": 697895.73, "avg_amount": 293.97, "fraud_rate": 5.392, "alert_level": "Normal"}, {"country": "BR", "region": "Rio", "volume": 2465, "fraud_count": 126, "total_amount": 746576.46, "avg_amount": 302.87, "fraud_rate": 5.112, "alert_level": "Normal"}, {"country": "BR", "region": "Paran\u00e1", "volume": 2435, "fraud_count": 115, "total_amount": 757213.17, "avg_amount": 310.97, "fraud_rate": 4.723, "alert_level": "Normal"}, {"country": "NG", "region": "Ibadan", "volume": 1501, "fraud_count": 114, "total_amount": 491386.06, "avg_amount": 327.37, "fraud_rate": 7.595, "alert_level": "Normal"}, {"country": "NG", "region": "Port Harcourt", "volume": 1559, "fraud_count": 111, "total_amount": 502510.46, "avg_amount": 322.33, "fraud_rate": 7.12, "alert_level": "Normal"}, {"country": "NG", "region": "Lagos", "volume": 1584, "fraud_count": 111, "total_amount": 481104.24, "avg_amount": 303.73, "fraud_rate": 7.008, "alert_level": "Normal"}, {"country": "BR", "region": "S\u00e3o Paulo", "volume": 2380, "fraud_count": 104, "total_amount": 737823.5, "avg_amount": 310.01, "fraud_rate": 4.37, "alert_level": "Normal"}, {"country": "IN", "region": "Chennai", "volume": 1803, "fraud_count": 100, "total_amount": 560560.18, "avg_amount": 310.9, "fraud_rate": 5.546, "alert_level": "Normal"}, {"country": "NG", "region": "Abuja", "volume": 1470, "fraud_count": 99, "total_amount": 456283.31, "avg_amount": 310.4, "fraud_rate": 6.735, "alert_level": "Normal"}, {"country": "IN", "region": "Bangalore", "volume": 1818, "fraud_count": 83, "total_amount": 598907.56, "avg_amount": 329.43, "fraud_rate": 4.565, "alert_level": "Normal"}, {"country": "IN", "region": "Delhi", "volume": 1700, "fraud_count": 83, "total_amount": 535530.4, "avg_amount": 315.02, "fraud_rate": 4.882, "alert_level": "Normal"}, {"country": "IN", "region": "Mumbai", "volume": 1793, "fraud_count": 82, "total_amount": 586771.41, "avg_amount": 327.26, "fraud_rate": 4.573, "alert_level": "Normal"}, {"country": "IN", "region": "Hyderabad", "volume": 1730, "fraud_count": 76, "total_amount": 528776.84, "avg_amount": 305.65, "fraud_rate": 4.393, "alert_level": "Normal"}, {"country": "FR", "region": "\u00cele-de-France", "volume": 2913, "fraud_count": 46, "total_amount": 911064.64, "avg_amount": 312.76, "fraud_rate": 1.579, "alert_level": "Normal"}, {"country": "FR", "region": "Lyon", "volume": 2979, "fraud_count": 44, "total_amount": 910292.6, "avg_amount": 305.57, "fraud_rate": 1.477, "alert_level": "Normal"}, {"country": "CA", "region": "BC", "volume": 2034, "fraud_count": 43, "total_amount": 613195.22, "avg_amount": 301.47, "fraud_rate": 2.114, "alert_level": "Normal"}, {"country": "FR", "region": "Normandy", "volume": 2822, "fraud_count": 42, "total_amount": 838230.4, "avg_amount": 297.03, "fraud_rate": 1.488, "alert_level": "Normal"}, {"country": "FR", "region": "Provence", "volume": 2863, "fraud_count": 38, "total_amount": 841185.73, "avg_amount": 293.81, "fraud_rate": 1.327, "alert_level": "Normal"}, {"country": "CA", "region": "Manitoba", "volume": 2052, "fraud_count": 36, "total_amount": 630035.84, "avg_amount": 307.04, "fraud_rate": 1.754, "alert_level": "Normal"}, {"country": "CA", "region": "Quebec", "volume": 2045, "fraud_count": 34, "total_amount": 606306.17, "avg_amount": 296.48, "fraud_rate": 1.663, "alert_level": "Normal"}, {"country": "CA", "region": "Ontario", "volume": 2049, "fraud_count": 34, "total_amount": 631468.4, "avg_amount": 308.18, "fraud_rate": 1.659, "alert_level": "Normal"}, {"country": "FR", "region": "Brittany", "volume": 2854, "fraud_count": 34, "total_amount": 859730.59, "avg_amount": 301.24, "fraud_rate": 1.191, "alert_level": "Normal"}, {"country": "CA", "region": "Alberta", "volume": 1980, "fraud_count": 26, "total_amount": 564385.1, "avg_amount": 285.04, "fraud_rate": 1.313, "alert_level": "Normal"}, {"country": "AU", "region": "Victoria", "volume": 1170, "fraud_count": 23, "total_amount": 328253.83, "avg_amount": 280.56, "fraud_rate": 1.966, "alert_level": "Normal"}, {"country": "AU", "region": "SA", "volume": 1138, "fraud_count": 22, "total_amount": 333484.1, "avg_amount": 293.04, "fraud_rate": 1.933, "alert_level": "Normal"}, {"country": "AU", "region": "NSW", "volume": 1177, "fraud_count": 20, "total_amount": 341013.81, "avg_amount": 289.73, "fraud_rate": 1.699, "alert_level": "Normal"}, {"country": "AU", "region": "Queensland", "volume": 1122, "fraud_count": 18, "total_amount": 335277.17, "avg_amount": 298.82, "fraud_rate": 1.604, "alert_level": "Normal"}, {"country": "AU", "region": "WA", "volume": 1157, "fraud_count": 12, "total_amount": 380780.11, "avg_amount": 329.11, "fraud_rate": 1.037, "alert_level": "Normal"}], "country": [{"country": "RO", "volume": 10189, "fraud_count": 2912, "total_amount": 2258754.84, "fraud_rate": 28.58, "alert_level": "Critical"}, {"country": "UK", "volume": 22576, "fraud_count": 1067, "total_amount": 8022142.05, "fraud_rate": 4.726, "alert_level": "Normal"}, {"country": "DE", "volume": 15160, "fraud_count": 918, "total_amount": 5829182.64, "fraud_rate": 6.055, "alert_level": "Normal"}, {"country": "US", "volume": 43578, "fraud_count": 700, "total_amount": 13216976.9, "fraud_rate": 1.606, "alert_level": "Normal"}, {"country": "BR", "volume": 12031, "fraud_count": 609, "total_amount": 3691090.5, "fraud_rate": 5.062, "alert_level": "Normal"}, {"country": "NG", "volume": 7667, "fraud_count": 565, "total_amount": 2432753.16, "fraud_rate": 7.369, "alert_level": "Normal"}, {"country": "IN", "volume": 8844, "fraud_count": 424, "total_amount": 2810546.39, "fraud_rate": 4.794, "alert_level": "Normal"}, {"country": "FR", "volume": 14431, "fraud_count": 204, "total_amount": 4360503.96, "fraud_rate": 1.414, "alert_level": "Normal"}, {"country": "CA", "volume": 10160, "fraud_count": 173, "total_amount": 3045390.73, "fraud_rate": 1.703, "alert_level": "Normal"}, {"country": "AU", "volume": 5764, "fraud_count": 95, "total_amount": 1718809.02, "fraud_rate": 1.648, "alert_level": "Normal"}], "seg_summary": [{"segment": "dormant", "volume": 12433, "fraud_count": 1227, "total_amount": 896622.48, "avg_amount": 72.12, "fraud_rate": 9.869, "alert_level": "Normal"}, {"segment": "high_value", "volume": 18169, "fraud_count": 828, "total_amount": 19128260.15, "avg_amount": 1052.8, "fraud_rate": 4.557, "alert_level": "Normal"}, {"segment": "new", "volume": 32061, "fraud_count": 3903, "total_amount": 3662855.18, "avg_amount": 114.25, "fraud_rate": 12.174, "alert_level": "Normal"}, {"segment": "premium", "volume": 28919, "fraud_count": 278, "total_amount": 11098983.59, "avg_amount": 383.8, "fraud_rate": 0.961, "alert_level": "Normal"}, {"segment": "regular", "volume": 58818, "fraud_count": 1431, "total_amount": 12599428.79, "avg_amount": 214.21, "fraud_rate": 2.433, "alert_level": "Normal"}], "seg_daily": [{"date": "2026-05-29", "segment": "dormant", "volume": 382, "fraud_count": 11, "total_amount": 30984.23, "fraud_rate": 2.88}, {"date": "2026-05-29", "segment": "high_value", "volume": 603, "fraud_count": 3, "total_amount": 594980.46, "fraud_rate": 0.498}, {"date": "2026-05-29", "segment": "new", "volume": 998, "fraud_count": 22, "total_amount": 100940.49, "fraud_rate": 2.204}, {"date": "2026-05-29", "segment": "premium", "volume": 940, "fraud_count": 5, "total_amount": 352549.5, "fraud_rate": 0.532}, {"date": "2026-05-29", "segment": "regular", "volume": 1948, "fraud_count": 27, "total_amount": 368369.13, "fraud_rate": 1.386}, {"date": "2026-05-30", "segment": "dormant", "volume": 377, "fraud_count": 10, "total_amount": 27085.69, "fraud_rate": 2.653}, {"date": "2026-05-30", "segment": "high_value", "volume": 498, "fraud_count": 3, "total_amount": 498604.64, "fraud_rate": 0.602}, {"date": "2026-05-30", "segment": "new", "volume": 970, "fraud_count": 26, "total_amount": 98643.78, "fraud_rate": 2.68}, {"date": "2026-05-30", "segment": "premium", "volume": 944, "fraud_count": 6, "total_amount": 363476.83, "fraud_rate": 0.636}, {"date": "2026-05-30", "segment": "regular", "volume": 1939, "fraud_count": 19, "total_amount": 378876.22, "fraud_rate": 0.98}, {"date": "2026-05-31", "segment": "dormant", "volume": 363, "fraud_count": 9, "total_amount": 28916.47, "fraud_rate": 2.479}, {"date": "2026-05-31", "segment": "high_value", "volume": 591, "fraud_count": 6, "total_amount": 589194.81, "fraud_rate": 1.015}, {"date": "2026-05-31", "segment": "new", "volume": 908, "fraud_count": 22, "total_amount": 91737.4, "fraud_rate": 2.423}, {"date": "2026-05-31", "segment": "premium", "volume": 942, "fraud_count": 11, "total_amount": 339904.35, "fraud_rate": 1.168}, {"date": "2026-05-31", "segment": "regular", "volume": 1904, "fraud_count": 27, "total_amount": 367227.63, "fraud_rate": 1.418}, {"date": "2026-06-01", "segment": "dormant", "volume": 419, "fraud_count": 15, "total_amount": 30613.68, "fraud_rate": 3.58}, {"date": "2026-06-01", "segment": "high_value", "volume": 597, "fraud_count": 3, "total_amount": 600739.5, "fraud_rate": 0.503}, {"date": "2026-06-01", "segment": "new", "volume": 951, "fraud_count": 29, "total_amount": 98039.83, "fraud_rate": 3.049}, {"date": "2026-06-01", "segment": "premium", "volume": 921, "fraud_count": 8, "total_amount": 338022.81, "fraud_rate": 0.869}, {"date": "2026-06-01", "segment": "regular", "volume": 1951, "fraud_count": 31, "total_amount": 371876.33, "fraud_rate": 1.589}, {"date": "2026-06-02", "segment": "dormant", "volume": 337, "fraud_count": 17, "total_amount": 26529.38, "fraud_rate": 5.045}, {"date": "2026-06-02", "segment": "high_value", "volume": 614, "fraud_count": 7, "total_amount": 657276.2, "fraud_rate": 1.14}, {"date": "2026-06-02", "segment": "new", "volume": 967, "fraud_count": 26, "total_amount": 98164.43, "fraud_rate": 2.689}, {"date": "2026-06-02", "segment": "premium", "volume": 990, "fraud_count": 15, "total_amount": 348464.0, "fraud_rate": 1.515}, {"date": "2026-06-02", "segment": "regular", "volume": 1884, "fraud_count": 21, "total_amount": 362063.73, "fraud_rate": 1.115}, {"date": "2026-06-03", "segment": "dormant", "volume": 403, "fraud_count": 9, "total_amount": 28209.87, "fraud_rate": 2.233}, {"date": "2026-06-03", "segment": "high_value", "volume": 627, "fraud_count": 3, "total_amount": 643972.74, "fraud_rate": 0.478}, {"date": "2026-06-03", "segment": "new", "volume": 913, "fraud_count": 23, "total_amount": 88683.02, "fraud_rate": 2.519}, {"date": "2026-06-03", "segment": "premium", "volume": 1021, "fraud_count": 11, "total_amount": 407649.16, "fraud_rate": 1.077}, {"date": "2026-06-03", "segment": "regular", "volume": 1991, "fraud_count": 26, "total_amount": 384023.28, "fraud_rate": 1.306}, {"date": "2026-06-04", "segment": "dormant", "volume": 353, "fraud_count": 14, "total_amount": 29023.8, "fraud_rate": 3.966}, {"date": "2026-06-04", "segment": "high_value", "volume": 605, "fraud_count": 4, "total_amount": 611106.2, "fraud_rate": 0.661}, {"date": "2026-06-04", "segment": "new", "volume": 940, "fraud_count": 17, "total_amount": 97523.33, "fraud_rate": 1.809}, {"date": "2026-06-04", "segment": "premium", "volume": 907, "fraud_count": 4, "total_amount": 357730.89, "fraud_rate": 0.441}, {"date": "2026-06-04", "segment": "regular", "volume": 1981, "fraud_count": 23, "total_amount": 381661.16, "fraud_rate": 1.161}, {"date": "2026-06-05", "segment": "dormant", "volume": 374, "fraud_count": 11, "total_amount": 28765.23, "fraud_rate": 2.941}, {"date": "2026-06-05", "segment": "high_value", "volume": 571, "fraud_count": 2, "total_amount": 570094.89, "fraud_rate": 0.35}, {"date": "2026-06-05", "segment": "new", "volume": 986, "fraud_count": 24, "total_amount": 99685.38, "fraud_rate": 2.434}, {"date": "2026-06-05", "segment": "premium", "volume": 995, "fraud_count": 9, "total_amount": 387251.72, "fraud_rate": 0.905}, {"date": "2026-06-05", "segment": "regular", "volume": 1890, "fraud_count": 24, "total_amount": 354784.38, "fraud_rate": 1.27}, {"date": "2026-06-06", "segment": "dormant", "volume": 402, "fraud_count": 16, "total_amount": 30758.37, "fraud_rate": 3.98}, {"date": "2026-06-06", "segment": "high_value", "volume": 545, "fraud_count": 4, "total_amount": 587743.57, "fraud_rate": 0.734}, {"date": "2026-06-06", "segment": "new", "volume": 964, "fraud_count": 22, "total_amount": 96873.73, "fraud_rate": 2.282}, {"date": "2026-06-06", "segment": "premium", "volume": 966, "fraud_count": 7, "total_amount": 365267.75, "fraud_rate": 0.725}, {"date": "2026-06-06", "segment": "regular", "volume": 1972, "fraud_count": 20, "total_amount": 382234.44, "fraud_rate": 1.014}, {"date": "2026-06-07", "segment": "dormant", "volume": 398, "fraud_count": 9, "total_amount": 31097.85, "fraud_rate": 2.261}, {"date": "2026-06-07", "segment": "high_value", "volume": 569, "fraud_count": 5, "total_amount": 557715.93, "fraud_rate": 0.879}, {"date": "2026-06-07", "segment": "new", "volume": 1006, "fraud_count": 35, "total_amount": 104341.29, "fraud_rate": 3.479}, {"date": "2026-06-07", "segment": "premium", "volume": 968, "fraud_count": 10, "total_amount": 372509.13, "fraud_rate": 1.033}, {"date": "2026-06-07", "segment": "regular", "volume": 1949, "fraud_count": 13, "total_amount": 381305.37, "fraud_rate": 0.667}, {"date": "2026-06-08", "segment": "dormant", "volume": 781, "fraud_count": 422, "total_amount": 33618.69, "fraud_rate": 54.033}, {"date": "2026-06-08", "segment": "high_value", "volume": 585, "fraud_count": 3, "total_amount": 563906.41, "fraud_rate": 0.513}, {"date": "2026-06-08", "segment": "new", "volume": 1948, "fraud_count": 1011, "total_amount": 108922.39, "fraud_rate": 51.899}, {"date": "2026-06-08", "segment": "premium", "volume": 970, "fraud_count": 17, "total_amount": 388099.56, "fraud_rate": 1.753}, {"date": "2026-06-08", "segment": "regular", "volume": 1959, "fraud_count": 33, "total_amount": 366467.5, "fraud_rate": 1.685}, {"date": "2026-06-09", "segment": "dormant", "volume": 805, "fraud_count": 434, "total_amount": 32416.61, "fraud_rate": 53.913}, {"date": "2026-06-09", "segment": "high_value", "volume": 592, "fraud_count": 4, "total_amount": 585241.74, "fraud_rate": 0.676}, {"date": "2026-06-09", "segment": "new", "volume": 1952, "fraud_count": 998, "total_amount": 113281.47, "fraud_rate": 51.127}, {"date": "2026-06-09", "segment": "premium", "volume": 1005, "fraud_count": 17, "total_amount": 392300.76, "fraud_rate": 1.692}, {"date": "2026-06-09", "segment": "regular", "volume": 1926, "fraud_count": 24, "total_amount": 372278.27, "fraud_rate": 1.246}, {"date": "2026-06-10", "segment": "dormant", "volume": 366, "fraud_count": 19, "total_amount": 26635.7, "fraud_rate": 5.191}, {"date": "2026-06-10", "segment": "high_value", "volume": 584, "fraud_count": 5, "total_amount": 597840.56, "fraud_rate": 0.856}, {"date": "2026-06-10", "segment": "new", "volume": 1010, "fraud_count": 23, "total_amount": 101062.25, "fraud_rate": 2.277}, {"date": "2026-06-10", "segment": "premium", "volume": 995, "fraud_count": 5, "total_amount": 382213.28, "fraud_rate": 0.503}, {"date": "2026-06-10", "segment": "regular", "volume": 1899, "fraud_count": 24, "total_amount": 361793.43, "fraud_rate": 1.264}, {"date": "2026-06-11", "segment": "dormant", "volume": 403, "fraud_count": 17, "total_amount": 31381.28, "fraud_rate": 4.218}, {"date": "2026-06-11", "segment": "high_value", "volume": 544, "fraud_count": 5, "total_amount": 540661.59, "fraud_rate": 0.919}, {"date": "2026-06-11", "segment": "new", "volume": 966, "fraud_count": 21, "total_amount": 93901.41, "fraud_rate": 2.174}, {"date": "2026-06-11", "segment": "premium", "volume": 975, "fraud_count": 6, "total_amount": 378519.05, "fraud_rate": 0.615}, {"date": "2026-06-11", "segment": "regular", "volume": 2005, "fraud_count": 26, "total_amount": 389345.65, "fraud_rate": 1.297}, {"date": "2026-06-12", "segment": "dormant", "volume": 394, "fraud_count": 16, "total_amount": 32156.96, "fraud_rate": 4.061}, {"date": "2026-06-12", "segment": "high_value", "volume": 577, "fraud_count": 6, "total_amount": 616323.06, "fraud_rate": 1.04}, {"date": "2026-06-12", "segment": "new", "volume": 950, "fraud_count": 17, "total_amount": 95261.38, "fraud_rate": 1.789}, {"date": "2026-06-12", "segment": "premium", "volume": 953, "fraud_count": 11, "total_amount": 352915.11, "fraud_rate": 1.154}, {"date": "2026-06-12", "segment": "regular", "volume": 1928, "fraud_count": 21, "total_amount": 361426.64, "fraud_rate": 1.089}, {"date": "2026-06-13", "segment": "dormant", "volume": 349, "fraud_count": 11, "total_amount": 26636.97, "fraud_rate": 3.152}, {"date": "2026-06-13", "segment": "high_value", "volume": 608, "fraud_count": 2, "total_amount": 644965.75, "fraud_rate": 0.329}, {"date": "2026-06-13", "segment": "new", "volume": 985, "fraud_count": 19, "total_amount": 100271.18, "fraud_rate": 1.929}, {"date": "2026-06-13", "segment": "premium", "volume": 939, "fraud_count": 9, "total_amount": 378190.17, "fraud_rate": 0.958}, {"date": "2026-06-13", "segment": "regular", "volume": 1912, "fraud_count": 20, "total_amount": 367091.33, "fraud_rate": 1.046}, {"date": "2026-06-14", "segment": "dormant", "volume": 365, "fraud_count": 9, "total_amount": 28513.5, "fraud_rate": 2.466}, {"date": "2026-06-14", "segment": "high_value", "volume": 550, "fraud_count": 9, "total_amount": 567587.86, "fraud_rate": 1.636}, {"date": "2026-06-14", "segment": "new", "volume": 940, "fraud_count": 24, "total_amount": 95423.4, "fraud_rate": 2.553}, {"date": "2026-06-14", "segment": "premium", "volume": 972, "fraud_count": 6, "total_amount": 359007.18, "fraud_rate": 0.617}, {"date": "2026-06-14", "segment": "regular", "volume": 1984, "fraud_count": 15, "total_amount": 384491.91, "fraud_rate": 0.756}, {"date": "2026-06-15", "segment": "dormant", "volume": 369, "fraud_count": 18, "total_amount": 26902.65, "fraud_rate": 4.878}, {"date": "2026-06-15", "segment": "high_value", "volume": 590, "fraud_count": 4, "total_amount": 607054.13, "fraud_rate": 0.678}, {"date": "2026-06-15", "segment": "new", "volume": 1018, "fraud_count": 32, "total_amount": 100436.77, "fraud_rate": 3.143}, {"date": "2026-06-15", "segment": "premium", "volume": 963, "fraud_count": 7, "total_amount": 360325.04, "fraud_rate": 0.727}, {"date": "2026-06-15", "segment": "regular", "volume": 1916, "fraud_count": 22, "total_amount": 377576.12, "fraud_rate": 1.148}, {"date": "2026-06-16", "segment": "dormant", "volume": 414, "fraud_count": 8, "total_amount": 30076.25, "fraud_rate": 1.932}, {"date": "2026-06-16", "segment": "high_value", "volume": 776, "fraud_count": 178, "total_amount": 935981.81, "fraud_rate": 22.938}, {"date": "2026-06-16", "segment": "new", "volume": 954, "fraud_count": 22, "total_amount": 97272.67, "fraud_rate": 2.306}, {"date": "2026-06-16", "segment": "premium", "volume": 929, "fraud_count": 6, "total_amount": 356061.65, "fraud_rate": 0.646}, {"date": "2026-06-16", "segment": "regular", "volume": 2118, "fraud_count": 200, "total_amount": 704519.19, "fraud_rate": 9.443}, {"date": "2026-06-17", "segment": "dormant", "volume": 382, "fraud_count": 13, "total_amount": 31292.93, "fraud_rate": 3.403}, {"date": "2026-06-17", "segment": "high_value", "volume": 738, "fraud_count": 183, "total_amount": 924270.17, "fraud_rate": 24.797}, {"date": "2026-06-17", "segment": "new", "volume": 953, "fraud_count": 24, "total_amount": 96183.32, "fraud_rate": 2.518}, {"date": "2026-06-17", "segment": "premium", "volume": 932, "fraud_count": 16, "total_amount": 362496.75, "fraud_rate": 1.717}, {"date": "2026-06-17", "segment": "regular", "volume": 2077, "fraud_count": 201, "total_amount": 728107.8, "fraud_rate": 9.677}, {"date": "2026-06-18", "segment": "dormant", "volume": 409, "fraud_count": 13, "total_amount": 33300.96, "fraud_rate": 3.178}, {"date": "2026-06-18", "segment": "high_value", "volume": 778, "fraud_count": 179, "total_amount": 936015.12, "fraud_rate": 23.008}, {"date": "2026-06-18", "segment": "new", "volume": 967, "fraud_count": 26, "total_amount": 102784.37, "fraud_rate": 2.689}, {"date": "2026-06-18", "segment": "premium", "volume": 957, "fraud_count": 8, "total_amount": 371848.52, "fraud_rate": 0.836}, {"date": "2026-06-18", "segment": "regular", "volume": 2094, "fraud_count": 205, "total_amount": 757909.99, "fraud_rate": 9.79}, {"date": "2026-06-19", "segment": "dormant", "volume": 380, "fraud_count": 12, "total_amount": 29231.56, "fraud_rate": 3.158}, {"date": "2026-06-19", "segment": "high_value", "volume": 762, "fraud_count": 163, "total_amount": 953230.5, "fraud_rate": 21.391}, {"date": "2026-06-19", "segment": "new", "volume": 954, "fraud_count": 22, "total_amount": 97327.43, "fraud_rate": 2.306}, {"date": "2026-06-19", "segment": "premium", "volume": 979, "fraud_count": 14, "total_amount": 382888.69, "fraud_rate": 1.43}, {"date": "2026-06-19", "segment": "regular", "volume": 2054, "fraud_count": 202, "total_amount": 726532.82, "fraud_rate": 9.834}, {"date": "2026-06-20", "segment": "dormant", "volume": 405, "fraud_count": 12, "total_amount": 30235.02, "fraud_rate": 2.963}, {"date": "2026-06-20", "segment": "high_value", "volume": 589, "fraud_count": 5, "total_amount": 614200.75, "fraud_rate": 0.849}, {"date": "2026-06-20", "segment": "new", "volume": 993, "fraud_count": 23, "total_amount": 102180.47, "fraud_rate": 2.316}, {"date": "2026-06-20", "segment": "premium", "volume": 950, "fraud_count": 7, "total_amount": 383361.46, "fraud_rate": 0.737}, {"date": "2026-06-20", "segment": "regular", "volume": 1904, "fraud_count": 16, "total_amount": 370309.62, "fraud_rate": 0.84}, {"date": "2026-06-21", "segment": "dormant", "volume": 396, "fraud_count": 18, "total_amount": 29774.72, "fraud_rate": 4.545}, {"date": "2026-06-21", "segment": "high_value", "volume": 570, "fraud_count": 4, "total_amount": 594625.85, "fraud_rate": 0.702}, {"date": "2026-06-21", "segment": "new", "volume": 998, "fraud_count": 31, "total_amount": 102340.46, "fraud_rate": 3.106}, {"date": "2026-06-21", "segment": "premium", "volume": 966, "fraud_count": 3, "total_amount": 384625.51, "fraud_rate": 0.311}, {"date": "2026-06-21", "segment": "regular", "volume": 1955, "fraud_count": 25, "total_amount": 373249.15, "fraud_rate": 1.279}, {"date": "2026-06-22", "segment": "dormant", "volume": 399, "fraud_count": 15, "total_amount": 29739.12, "fraud_rate": 3.759}, {"date": "2026-06-22", "segment": "high_value", "volume": 566, "fraud_count": 8, "total_amount": 566457.33, "fraud_rate": 1.413}, {"date": "2026-06-22", "segment": "new", "volume": 1196, "fraud_count": 308, "total_amount": 256398.5, "fraud_rate": 25.753}, {"date": "2026-06-22", "segment": "premium", "volume": 935, "fraud_count": 8, "total_amount": 345609.19, "fraud_rate": 0.856}, {"date": "2026-06-22", "segment": "regular", "volume": 1922, "fraud_count": 31, "total_amount": 357167.09, "fraud_rate": 1.613}, {"date": "2026-06-23", "segment": "dormant", "volume": 388, "fraud_count": 8, "total_amount": 29184.48, "fraud_rate": 2.062}, {"date": "2026-06-23", "segment": "high_value", "volume": 596, "fraud_count": 1, "total_amount": 627271.44, "fraud_rate": 0.168}, {"date": "2026-06-23", "segment": "new", "volume": 1232, "fraud_count": 335, "total_amount": 256026.52, "fraud_rate": 27.192}, {"date": "2026-06-23", "segment": "premium", "volume": 1002, "fraud_count": 8, "total_amount": 373824.83, "fraud_rate": 0.798}, {"date": "2026-06-23", "segment": "regular", "volume": 1915, "fraud_count": 23, "total_amount": 372110.31, "fraud_rate": 1.201}, {"date": "2026-06-24", "segment": "dormant", "volume": 440, "fraud_count": 14, "total_amount": 35743.09, "fraud_rate": 3.182}, {"date": "2026-06-24", "segment": "high_value", "volume": 593, "fraud_count": 8, "total_amount": 606182.84, "fraud_rate": 1.349}, {"date": "2026-06-24", "segment": "new", "volume": 1266, "fraud_count": 347, "total_amount": 293531.71, "fraud_rate": 27.409}, {"date": "2026-06-24", "segment": "premium", "volume": 997, "fraud_count": 13, "total_amount": 384120.08, "fraud_rate": 1.304}, {"date": "2026-06-24", "segment": "regular", "volume": 1962, "fraud_count": 25, "total_amount": 383250.63, "fraud_rate": 1.274}, {"date": "2026-06-25", "segment": "dormant", "volume": 393, "fraud_count": 17, "total_amount": 28399.7, "fraud_rate": 4.326}, {"date": "2026-06-25", "segment": "high_value", "volume": 575, "fraud_count": 8, "total_amount": 550981.81, "fraud_rate": 1.391}, {"date": "2026-06-25", "segment": "new", "volume": 1271, "fraud_count": 324, "total_amount": 277456.23, "fraud_rate": 25.492}, {"date": "2026-06-25", "segment": "premium", "volume": 943, "fraud_count": 13, "total_amount": 367861.94, "fraud_rate": 1.379}, {"date": "2026-06-25", "segment": "regular", "volume": 1910, "fraud_count": 23, "total_amount": 358675.09, "fraud_rate": 1.204}, {"date": "2026-06-26", "segment": "dormant", "volume": 372, "fraud_count": 19, "total_amount": 28256.57, "fraud_rate": 5.108}, {"date": "2026-06-26", "segment": "high_value", "volume": 621, "fraud_count": 7, "total_amount": 615803.38, "fraud_rate": 1.127}, {"date": "2026-06-26", "segment": "new", "volume": 916, "fraud_count": 30, "total_amount": 94149.19, "fraud_rate": 3.275}, {"date": "2026-06-26", "segment": "premium", "volume": 977, "fraud_count": 10, "total_amount": 385317.85, "fraud_rate": 1.024}, {"date": "2026-06-26", "segment": "regular", "volume": 1920, "fraud_count": 31, "total_amount": 370327.12, "fraud_rate": 1.615}, {"date": "2026-06-27", "segment": "dormant", "volume": 415, "fraud_count": 11, "total_amount": 31141.15, "fraud_rate": 2.651}, {"date": "2026-06-27", "segment": "high_value", "volume": 555, "fraud_count": 6, "total_amount": 568229.11, "fraud_rate": 1.081}, {"date": "2026-06-27", "segment": "new", "volume": 989, "fraud_count": 20, "total_amount": 104011.38, "fraud_rate": 2.022}, {"date": "2026-06-27", "segment": "premium", "volume": 986, "fraud_count": 8, "total_amount": 376570.83, "fraud_rate": 0.811}, {"date": "2026-06-27", "segment": "regular", "volume": 2049, "fraud_count": 33, "total_amount": 384377.46, "fraud_rate": 1.611}], "merchant": [{"merchant_category": "electronics", "volume": 19515, "fraud_count": 2640, "total_amount": 6333650.84, "fraud_rate": 13.528, "alert_level": "Elevated"}, {"merchant_category": "clothing", "volume": 13901, "fraud_count": 1306, "total_amount": 3805302.55, "fraud_rate": 9.395, "alert_level": "Normal"}, {"merchant_category": "crypto_exchange", "volume": 8075, "fraud_count": 1092, "total_amount": 2680266.6, "fraud_rate": 13.523, "alert_level": "Elevated"}, {"merchant_category": "travel", "volume": 15093, "fraud_count": 1015, "total_amount": 5199470.01, "fraud_rate": 6.725, "alert_level": "Normal"}, {"merchant_category": "luxury", "volume": 12251, "fraud_count": 873, "total_amount": 4685891.78, "fraud_rate": 7.126, "alert_level": "Normal"}, {"merchant_category": "entertainment", "volume": 14497, "fraud_count": 213, "total_amount": 4457242.29, "fraud_rate": 1.469, "alert_level": "Normal"}, {"merchant_category": "grocery", "volume": 26419, "fraud_count": 169, "total_amount": 7974349.86, "fraud_rate": 0.64, "alert_level": "Normal"}, {"merchant_category": "restaurant", "volume": 17667, "fraud_count": 154, "total_amount": 5303935.15, "fraud_rate": 0.872, "alert_level": "Normal"}, {"merchant_category": "pharmacy", "volume": 10106, "fraud_count": 108, "total_amount": 3061640.51, "fraud_rate": 1.069, "alert_level": "Normal"}, {"merchant_category": "fuel", "volume": 12876, "fraud_count": 97, "total_amount": 3884400.6, "fraud_rate": 0.753, "alert_level": "Normal"}], "alerts": [{"id": "GEO-RO-CLU", "type": "Geography", "bucket": "RO / Cluj", "alert_level": "Critical", "fraud_count": 601, "fraud_rate": 29.738, "volume": 2021, "reason": "RO / Cluj: fraud rate 29.7% with 601 fraud transactions.", "next_steps": "Flag region for enhanced authentication. Review linked device fingerprints."}, {"id": "GEO-RO-IAS", "type": "Geography", "bucket": "RO / Iasi", "alert_level": "Critical", "fraud_count": 598, "fraud_rate": 29.633, "volume": 2018, "reason": "RO / Iasi: fraud rate 29.6% with 598 fraud transactions.", "next_steps": "Flag region for enhanced authentication. Review linked device fingerprints."}, {"id": "GEO-RO-BUC", "type": "Geography", "bucket": "RO / Bucharest", "alert_level": "Critical", "fraud_count": 587, "fraud_rate": 28.775, "volume": 2040, "reason": "RO / Bucharest: fraud rate 28.8% with 587 fraud transactions.", "next_steps": "Flag region for enhanced authentication. Review linked device fingerprints."}, {"id": "GEO-RO-TIM", "type": "Geography", "bucket": "RO / Timisoara", "alert_level": "Critical", "fraud_count": 581, "fraud_rate": 28.564, "volume": 2034, "reason": "RO / Timisoara: fraud rate 28.6% with 581 fraud transactions.", "next_steps": "Flag region for enhanced authentication. Review linked device fingerprints."}, {"id": "GEO-RO-CON", "type": "Geography", "bucket": "RO / Constanta", "alert_level": "Critical", "fraud_count": 545, "fraud_rate": 26.252, "volume": 2076, "reason": "RO / Constanta: fraud rate 26.3% with 545 fraud transactions.", "next_steps": "Flag region for enhanced authentication. Review linked device fingerprints."}], "cases": [{"transaction_id": "TXN4930377A4A", "timestamp": "2026-06-03 03:58", "customer_id": "C0011152", "amount": 315.39, "channel": "call_center", "country": "UK", "region": "Wales", "merchant_category": "travel", "segment": "regular", "risk_score": 100.0}, {"transaction_id": "TXN6517379569", "timestamp": "2026-06-26 20:30", "customer_id": "C0029063", "amount": 193.54, "channel": "web", "country": "FR", "region": "Brittany", "merchant_category": "clothing", "segment": "dormant", "risk_score": 99.1}, {"transaction_id": "TXN648B91AFA7", "timestamp": "2026-06-22 10:17", "customer_id": "C0009269", "amount": 204.07, "channel": "web", "country": "US", "region": "Midwest", "merchant_category": "travel", "segment": "regular", "risk_score": 99.1}, {"transaction_id": "TXN28BCB1165D", "timestamp": "2026-06-08 19:55", "customer_id": "C0020237", "amount": 100.41, "channel": "mobile", "country": "UK", "region": "North England", "merchant_category": "crypto_exchange", "segment": "regular", "risk_score": 99.1}, {"transaction_id": "TXN95C6345B5F", "timestamp": "2026-06-24 14:29", "customer_id": "C0028629", "amount": 95.45, "channel": "pos", "country": "US", "region": "West", "merchant_category": "pharmacy", "segment": "dormant", "risk_score": 99.1}, {"transaction_id": "TXN195704D42C", "timestamp": "2026-06-15 14:27", "customer_id": "C0001788", "amount": 168.46, "channel": "mobile", "country": "UK", "region": "Scotland", "merchant_category": "grocery", "segment": "new", "risk_score": 99.1}, {"transaction_id": "TXNBD853B475D", "timestamp": "2026-06-08 04:25", "customer_id": "C0015513", "amount": 85.4, "channel": "web", "country": "UK", "region": "Scotland", "merchant_category": "electronics", "segment": "regular", "risk_score": 99.0}, {"transaction_id": "TXN1E14E388E4", "timestamp": "2026-06-01 15:10", "customer_id": "C0005751", "amount": 187.36, "channel": "api", "country": "IN", "region": "Hyderabad", "merchant_category": "electronics", "segment": "regular", "risk_score": 99.0}, {"transaction_id": "TXN976D163009", "timestamp": "2026-06-22 02:44", "customer_id": "C0014595", "amount": 277.3, "channel": "call_center", "country": "BR", "region": "Rio", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 99.0}, {"transaction_id": "TXN722267AD77", "timestamp": "2026-06-10 16:25", "customer_id": "C0018687", "amount": 149.0, "channel": "web", "country": "CA", "region": "Manitoba", "merchant_category": "clothing", "segment": "regular", "risk_score": 99.0}, {"transaction_id": "TXN8661C36A41", "timestamp": "2026-06-15 20:35", "customer_id": "C0019735", "amount": 128.84, "channel": "mobile", "country": "UK", "region": "North England", "merchant_category": "electronics", "segment": "dormant", "risk_score": 98.9}, {"transaction_id": "TXN248F4670BD", "timestamp": "2026-06-22 13:41", "customer_id": "C0006092", "amount": 333.08, "channel": "call_center", "country": "BR", "region": "Bahia", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 98.9}, {"transaction_id": "TXN2B52E2231F", "timestamp": "2026-06-22 19:34", "customer_id": "C0015605", "amount": 1400.2, "channel": "call_center", "country": "BR", "region": "Minas Gerais", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 98.9}, {"transaction_id": "TXN4F17070752", "timestamp": "2026-06-22 04:05", "customer_id": "C0021549", "amount": 389.1, "channel": "call_center", "country": "NG", "region": "Ibadan", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 98.8}, {"transaction_id": "TXNB7FE19ED2F", "timestamp": "2026-06-17 16:06", "customer_id": "C0012145", "amount": 146.41, "channel": "mobile", "country": "IN", "region": "Mumbai", "merchant_category": "grocery", "segment": "regular", "risk_score": 98.8}, {"transaction_id": "TXN08D39338F0", "timestamp": "2026-06-25 01:01", "customer_id": "C0029688", "amount": 349.37, "channel": "call_center", "country": "BR", "region": "Paran\u00e1", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 98.8}, {"transaction_id": "TXNA0ACFC0CCB", "timestamp": "2026-06-24 15:07", "customer_id": "C0011953", "amount": 484.53, "channel": "call_center", "country": "NG", "region": "Ibadan", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 98.8}, {"transaction_id": "TXND7459CD94D", "timestamp": "2026-06-24 15:54", "customer_id": "C0023873", "amount": 560.68, "channel": "call_center", "country": "NG", "region": "Kano", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 98.8}, {"transaction_id": "TXN62BB0476BC", "timestamp": "2026-06-22 13:33", "customer_id": "C0018402", "amount": 373.14, "channel": "call_center", "country": "NG", "region": "Port Harcourt", "merchant_category": "travel", "segment": "new", "risk_score": 98.8}, {"transaction_id": "TXN94A503CD73", "timestamp": "2026-06-23 11:19", "customer_id": "C0021028", "amount": 1328.31, "channel": "call_center", "country": "IN", "region": "Chennai", "merchant_category": "travel", "segment": "new", "risk_score": 98.7}, {"transaction_id": "TXN0FB7BABF40", "timestamp": "2026-06-25 00:35", "customer_id": "C0001988", "amount": 173.47, "channel": "call_center", "country": "NG", "region": "Lagos", "merchant_category": "travel", "segment": "new", "risk_score": 98.7}, {"transaction_id": "TXN32D32773F1", "timestamp": "2026-06-09 14:03", "customer_id": "C0010083", "amount": 71.88, "channel": "web", "country": "US", "region": "Southeast", "merchant_category": "travel", "segment": "dormant", "risk_score": 98.7}, {"transaction_id": "TXN9C9621326E", "timestamp": "2026-06-15 08:58", "customer_id": "C0017534", "amount": 96.39, "channel": "web", "country": "US", "region": "Southeast", "merchant_category": "grocery", "segment": "new", "risk_score": 98.7}, {"transaction_id": "TXN04BF8F3D8B", "timestamp": "2026-06-18 03:20", "customer_id": "C0024328", "amount": 203.08, "channel": "web", "country": "UK", "region": "Midlands", "merchant_category": "restaurant", "segment": "new", "risk_score": 98.7}, {"transaction_id": "TXNE56AA44202", "timestamp": "2026-06-22 09:52", "customer_id": "C0002917", "amount": 370.45, "channel": "call_center", "country": "IN", "region": "Hyderabad", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 98.7}, {"transaction_id": "TXN3E339DFF94", "timestamp": "2026-06-22 16:59", "customer_id": "C0004135", "amount": 579.05, "channel": "call_center", "country": "NG", "region": "Ibadan", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 98.7}, {"transaction_id": "TXNE910B48C0B", "timestamp": "2026-06-22 04:22", "customer_id": "C0011151", "amount": 151.99, "channel": "call_center", "country": "NG", "region": "Ibadan", "merchant_category": "travel", "segment": "new", "risk_score": 98.6}, {"transaction_id": "TXNB90FF4A235", "timestamp": "2026-06-25 19:46", "customer_id": "C0004748", "amount": 944.05, "channel": "call_center", "country": "NG", "region": "Port Harcourt", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 98.6}, {"transaction_id": "TXNE483C38299", "timestamp": "2026-06-23 19:57", "customer_id": "C0021256", "amount": 333.89, "channel": "call_center", "country": "NG", "region": "Abuja", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 98.6}, {"transaction_id": "TXN7D3D7E897E", "timestamp": "2026-06-19 08:35", "customer_id": "C0013119", "amount": 92.15, "channel": "pos", "country": "UK", "region": "Wales", "merchant_category": "travel", "segment": "new", "risk_score": 98.6}, {"transaction_id": "TXNA8746A4BD0", "timestamp": "2026-06-22 17:57", "customer_id": "C0003723", "amount": 86.41, "channel": "call_center", "country": "NG", "region": "Kano", "merchant_category": "travel", "segment": "new", "risk_score": 98.6}, {"transaction_id": "TXNCEE53705CE", "timestamp": "2026-06-25 02:02", "customer_id": "C0028045", "amount": 272.06, "channel": "call_center", "country": "NG", "region": "Port Harcourt", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 98.6}, {"transaction_id": "TXNEA11C9BB2E", "timestamp": "2026-06-22 07:36", "customer_id": "C0018510", "amount": 386.26, "channel": "call_center", "country": "NG", "region": "Kano", "merchant_category": "travel", "segment": "new", "risk_score": 98.5}, {"transaction_id": "TXN67F258CE84", "timestamp": "2026-06-22 06:28", "customer_id": "C0016300", "amount": 202.41, "channel": "call_center", "country": "BR", "region": "Minas Gerais", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 98.5}, {"transaction_id": "TXNCD97D1AAA5", "timestamp": "2026-06-24 20:32", "customer_id": "C0028443", "amount": 374.1, "channel": "call_center", "country": "NG", "region": "Ibadan", "merchant_category": "travel", "segment": "new", "risk_score": 98.5}, {"transaction_id": "TXN55387FCD2F", "timestamp": "2026-06-25 12:12", "customer_id": "C0007290", "amount": 455.76, "channel": "call_center", "country": "IN", "region": "Hyderabad", "merchant_category": "travel", "segment": "new", "risk_score": 98.5}, {"transaction_id": "TXN3231749A6D", "timestamp": "2026-06-08 09:57", "customer_id": "C0010694", "amount": 149.06, "channel": "web", "country": "IN", "region": "Chennai", "merchant_category": "luxury", "segment": "premium", "risk_score": 98.5}, {"transaction_id": "TXN847CACF05E", "timestamp": "2026-06-24 20:59", "customer_id": "C0013440", "amount": 1041.46, "channel": "call_center", "country": "BR", "region": "Rio", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 98.4}, {"transaction_id": "TXN3A532033AA", "timestamp": "2026-06-06 07:31", "customer_id": "C0010307", "amount": 66.65, "channel": "pos", "country": "US", "region": "Southeast", "merchant_category": "grocery", "segment": "dormant", "risk_score": 98.4}, {"transaction_id": "TXND801C04C43", "timestamp": "2026-06-25 22:07", "customer_id": "C0004825", "amount": 892.94, "channel": "call_center", "country": "NG", "region": "Lagos", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 98.4}, {"transaction_id": "TXN0D55E009FA", "timestamp": "2026-06-02 22:31", "customer_id": "C0002383", "amount": 1114.49, "channel": "web", "country": "CA", "region": "Manitoba", "merchant_category": "pharmacy", "segment": "high_value", "risk_score": 98.4}, {"transaction_id": "TXND79FA794D2", "timestamp": "2026-06-25 06:41", "customer_id": "C0026268", "amount": 280.45, "channel": "call_center", "country": "IN", "region": "Chennai", "merchant_category": "travel", "segment": "new", "risk_score": 98.4}, {"transaction_id": "TXN46DA96A4B4", "timestamp": "2026-06-27 02:38", "customer_id": "C0012017", "amount": 390.71, "channel": "web", "country": "RO", "region": "Cluj", "merchant_category": "entertainment", "segment": "premium", "risk_score": 98.4}, {"transaction_id": "TXN530976B9A5", "timestamp": "2026-06-22 10:06", "customer_id": "C0015553", "amount": 797.57, "channel": "call_center", "country": "IN", "region": "Mumbai", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 98.4}, {"transaction_id": "TXN665D92AA06", "timestamp": "2026-06-22 00:23", "customer_id": "C0014436", "amount": 405.4, "channel": "call_center", "country": "NG", "region": "Abuja", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 98.4}, {"transaction_id": "TXN5C99D48304", "timestamp": "2026-06-25 19:20", "customer_id": "C0025280", "amount": 959.77, "channel": "call_center", "country": "NG", "region": "Ibadan", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 98.3}, {"transaction_id": "TXN3D179E98D0", "timestamp": "2026-05-31 15:31", "customer_id": "C0005390", "amount": 106.83, "channel": "mobile", "country": "US", "region": "West", "merchant_category": "travel", "segment": "dormant", "risk_score": 98.3}, {"transaction_id": "TXN5195A97BC3", "timestamp": "2026-06-06 18:50", "customer_id": "C0011645", "amount": 24.85, "channel": "pos", "country": "FR", "region": "Normandy", "merchant_category": "restaurant", "segment": "dormant", "risk_score": 98.3}, {"transaction_id": "TXNCA1B99A4C6", "timestamp": "2026-06-19 01:34", "customer_id": "C0026524", "amount": 45.61, "channel": "mobile", "country": "DE", "region": "Hamburg", "merchant_category": "electronics", "segment": "new", "risk_score": 98.2}, {"transaction_id": "TXN2E5EEA1A69", "timestamp": "2026-06-22 10:25", "customer_id": "C0027074", "amount": 610.34, "channel": "call_center", "country": "IN", "region": "Hyderabad", "merchant_category": "travel", "segment": "new", "risk_score": 98.2}, {"transaction_id": "TXN1F777175AF", "timestamp": "2026-06-24 17:49", "customer_id": "C0024498", "amount": 591.3, "channel": "call_center", "country": "IN", "region": "Hyderabad", "merchant_category": "travel", "segment": "new", "risk_score": 98.2}, {"transaction_id": "TXN4B9A29D472", "timestamp": "2026-06-22 14:31", "customer_id": "C0024322", "amount": 433.41, "channel": "call_center", "country": "IN", "region": "Delhi", "merchant_category": "travel", "segment": "new", "risk_score": 98.1}, {"transaction_id": "TXN401359D05B", "timestamp": "2026-06-23 08:46", "customer_id": "C0007585", "amount": 228.12, "channel": "call_center", "country": "NG", "region": "Kano", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 98.1}, {"transaction_id": "TXN9ECA6659A8", "timestamp": "2026-06-20 08:03", "customer_id": "C0019439", "amount": 927.24, "channel": "web", "country": "UK", "region": "Wales", "merchant_category": "luxury", "segment": "high_value", "risk_score": 98.1}, {"transaction_id": "TXN3282453B10", "timestamp": "2026-06-25 17:05", "customer_id": "C0005779", "amount": 458.57, "channel": "call_center", "country": "NG", "region": "Abuja", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 98.1}, {"transaction_id": "TXNDE8E05BC9A", "timestamp": "2026-06-25 13:23", "customer_id": "C0022479", "amount": 352.1, "channel": "call_center", "country": "IN", "region": "Delhi", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 98.1}, {"transaction_id": "TXN87B5565F99", "timestamp": "2026-06-02 18:30", "customer_id": "C0007005", "amount": 34.9, "channel": "mobile", "country": "US", "region": "West", "merchant_category": "grocery", "segment": "dormant", "risk_score": 98.1}, {"transaction_id": "TXNDFAFBE21DA", "timestamp": "2026-06-12 23:47", "customer_id": "C0029700", "amount": 53.53, "channel": "api", "country": "US", "region": "Southeast", "merchant_category": "clothing", "segment": "new", "risk_score": 98.1}, {"transaction_id": "TXN93F5CBE0CA", "timestamp": "2026-06-24 01:42", "customer_id": "C0011329", "amount": 323.64, "channel": "call_center", "country": "NG", "region": "Ibadan", "merchant_category": "travel", "segment": "new", "risk_score": 98.1}, {"transaction_id": "TXNE5B36BC431", "timestamp": "2026-06-25 09:40", "customer_id": "C0017020", "amount": 313.12, "channel": "call_center", "country": "IN", "region": "Delhi", "merchant_category": "travel", "segment": "new", "risk_score": 98.1}, {"transaction_id": "TXN0D89848800", "timestamp": "2026-06-08 00:58", "customer_id": "C0014529", "amount": 226.71, "channel": "mobile", "country": "DE", "region": "Saxony", "merchant_category": "electronics", "segment": "premium", "risk_score": 98.1}, {"transaction_id": "TXN9DEB91E654", "timestamp": "2026-06-23 14:44", "customer_id": "C0005074", "amount": 220.95, "channel": "call_center", "country": "BR", "region": "S\u00e3o Paulo", "merchant_category": "travel", "segment": "new", "risk_score": 98.1}, {"transaction_id": "TXNA64C738021", "timestamp": "2026-06-15 00:48", "customer_id": "C0028010", "amount": 80.77, "channel": "web", "country": "DE", "region": "NRW", "merchant_category": "restaurant", "segment": "new", "risk_score": 98.0}, {"transaction_id": "TXNF6FBE5C057", "timestamp": "2026-06-23 23:34", "customer_id": "C0016885", "amount": 317.98, "channel": "call_center", "country": "BR", "region": "Bahia", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 98.0}, {"transaction_id": "TXN6500E4A6D6", "timestamp": "2026-06-08 03:12", "customer_id": "C0002622", "amount": 3.04, "channel": "mobile", "country": "RO", "region": "Constanta", "merchant_category": "clothing", "segment": "new", "risk_score": 98.0}, {"transaction_id": "TXN9CA7FEE31F", "timestamp": "2026-06-08 20:14", "customer_id": "C0025424", "amount": 4.55, "channel": "mobile", "country": "RO", "region": "Constanta", "merchant_category": "clothing", "segment": "new", "risk_score": 98.0}, {"transaction_id": "TXN644F30545A", "timestamp": "2026-06-22 19:40", "customer_id": "C0013171", "amount": 366.89, "channel": "call_center", "country": "NG", "region": "Lagos", "merchant_category": "travel", "segment": "new", "risk_score": 98.0}, {"transaction_id": "TXN5E1D1C5AEB", "timestamp": "2026-06-03 03:04", "customer_id": "C0015195", "amount": 197.26, "channel": "pos", "country": "IN", "region": "Hyderabad", "merchant_category": "electronics", "segment": "new", "risk_score": 98.0}, {"transaction_id": "TXNBD61FC64F9", "timestamp": "2026-06-22 19:09", "customer_id": "C0016644", "amount": 400.59, "channel": "call_center", "country": "IN", "region": "Delhi", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 98.0}, {"transaction_id": "TXNF39E82AC3D", "timestamp": "2026-06-08 13:25", "customer_id": "C0008820", "amount": 13.49, "channel": "mobile", "country": "RO", "region": "Constanta", "merchant_category": "clothing", "segment": "new", "risk_score": 98.0}, {"transaction_id": "TXN0C335473BC", "timestamp": "2026-06-08 06:01", "customer_id": "C0012240", "amount": 13.49, "channel": "mobile", "country": "RO", "region": "Bucharest", "merchant_category": "clothing", "segment": "new", "risk_score": 98.0}, {"transaction_id": "TXN82C6A386FA", "timestamp": "2026-06-22 12:56", "customer_id": "C0029105", "amount": 167.53, "channel": "call_center", "country": "IN", "region": "Chennai", "merchant_category": "travel", "segment": "new", "risk_score": 98.0}, {"transaction_id": "TXNDEC82D0B27", "timestamp": "2026-06-24 23:48", "customer_id": "C0000939", "amount": 1065.07, "channel": "call_center", "country": "BR", "region": "Bahia", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 98.0}, {"transaction_id": "TXN8D9D5E7875", "timestamp": "2026-06-24 00:59", "customer_id": "C0020685", "amount": 701.09, "channel": "call_center", "country": "NG", "region": "Ibadan", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 98.0}, {"transaction_id": "TXN801C30037E", "timestamp": "2026-06-22 06:12", "customer_id": "C0006622", "amount": 257.03, "channel": "call_center", "country": "IN", "region": "Hyderabad", "merchant_category": "travel", "segment": "new", "risk_score": 97.9}, {"transaction_id": "TXN44FFB6F94B", "timestamp": "2026-06-08 15:58", "customer_id": "C0020698", "amount": 6.4, "channel": "mobile", "country": "RO", "region": "Bucharest", "merchant_category": "electronics", "segment": "new", "risk_score": 97.9}, {"transaction_id": "TXN82BDD6D74C", "timestamp": "2026-06-02 16:27", "customer_id": "C0005156", "amount": 180.32, "channel": "call_center", "country": "US", "region": "Midwest", "merchant_category": "clothing", "segment": "regular", "risk_score": 97.9}, {"transaction_id": "TXN44EB2C0C25", "timestamp": "2026-06-08 00:53", "customer_id": "C0009271", "amount": 7.88, "channel": "mobile", "country": "RO", "region": "Timisoara", "merchant_category": "clothing", "segment": "new", "risk_score": 97.9}, {"transaction_id": "TXN57A12017A3", "timestamp": "2026-06-08 10:38", "customer_id": "C0005107", "amount": 4.16, "channel": "mobile", "country": "RO", "region": "Iasi", "merchant_category": "electronics", "segment": "dormant", "risk_score": 97.9}, {"transaction_id": "TXNCF1A1C6674", "timestamp": "2026-06-08 10:04", "customer_id": "C0006144", "amount": 10.59, "channel": "mobile", "country": "RO", "region": "Timisoara", "merchant_category": "electronics", "segment": "new", "risk_score": 97.9}, {"transaction_id": "TXNC344DD19A6", "timestamp": "2026-06-09 22:17", "customer_id": "C0015716", "amount": 7.69, "channel": "mobile", "country": "RO", "region": "Iasi", "merchant_category": "clothing", "segment": "new", "risk_score": 97.9}, {"transaction_id": "TXN4D2CBDC7E9", "timestamp": "2026-06-09 21:28", "customer_id": "C0018366", "amount": 3.87, "channel": "mobile", "country": "RO", "region": "Iasi", "merchant_category": "electronics", "segment": "new", "risk_score": 97.9}, {"transaction_id": "TXNECA9293497", "timestamp": "2026-06-08 00:50", "customer_id": "C0021870", "amount": 4.53, "channel": "mobile", "country": "RO", "region": "Cluj", "merchant_category": "electronics", "segment": "dormant", "risk_score": 97.9}, {"transaction_id": "TXNF7407F4E33", "timestamp": "2026-06-23 08:24", "customer_id": "C0009396", "amount": 235.01, "channel": "call_center", "country": "BR", "region": "Rio", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 97.9}, {"transaction_id": "TXNAC375FF949", "timestamp": "2026-06-23 15:18", "customer_id": "C0008506", "amount": 521.95, "channel": "call_center", "country": "IN", "region": "Chennai", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 97.9}, {"transaction_id": "TXN68D8654363", "timestamp": "2026-06-24 15:10", "customer_id": "C0010487", "amount": 177.51, "channel": "call_center", "country": "NG", "region": "Lagos", "merchant_category": "travel", "segment": "new", "risk_score": 97.9}, {"transaction_id": "TXN52E49441C8", "timestamp": "2026-06-08 09:36", "customer_id": "C0005268", "amount": 13.92, "channel": "mobile", "country": "RO", "region": "Cluj", "merchant_category": "clothing", "segment": "new", "risk_score": 97.9}, {"transaction_id": "TXNC6264C5DE3", "timestamp": "2026-06-09 14:27", "customer_id": "C0009535", "amount": 14.39, "channel": "mobile", "country": "RO", "region": "Timisoara", "merchant_category": "clothing", "segment": "dormant", "risk_score": 97.9}, {"transaction_id": "TXN00C00CE758", "timestamp": "2026-06-24 11:05", "customer_id": "C0012403", "amount": 311.29, "channel": "call_center", "country": "IN", "region": "Chennai", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 97.9}, {"transaction_id": "TXNE950D04056", "timestamp": "2026-06-09 05:12", "customer_id": "C0023259", "amount": 6.05, "channel": "mobile", "country": "RO", "region": "Iasi", "merchant_category": "electronics", "segment": "dormant", "risk_score": 97.9}, {"transaction_id": "TXN72538B53FF", "timestamp": "2026-06-22 17:05", "customer_id": "C0021289", "amount": 67.8, "channel": "web", "country": "FR", "region": "Normandy", "merchant_category": "entertainment", "segment": "regular", "risk_score": 97.9}, {"transaction_id": "TXNB2630CCD06", "timestamp": "2026-06-08 15:42", "customer_id": "C0021128", "amount": 3.94, "channel": "mobile", "country": "RO", "region": "Cluj", "merchant_category": "electronics", "segment": "dormant", "risk_score": 97.9}, {"transaction_id": "TXN7DAC40CE6A", "timestamp": "2026-06-08 13:00", "customer_id": "C0011951", "amount": 81.48, "channel": "web", "country": "IN", "region": "Chennai", "merchant_category": "electronics", "segment": "regular", "risk_score": 97.9}, {"transaction_id": "TXNE966BEEE39", "timestamp": "2026-06-08 12:54", "customer_id": "C0028812", "amount": 12.42, "channel": "mobile", "country": "RO", "region": "Iasi", "merchant_category": "electronics", "segment": "new", "risk_score": 97.9}, {"transaction_id": "TXN0CB348C7CF", "timestamp": "2026-06-09 08:59", "customer_id": "C0000504", "amount": 1.43, "channel": "mobile", "country": "RO", "region": "Iasi", "merchant_category": "electronics", "segment": "dormant", "risk_score": 97.8}, {"transaction_id": "TXN52DE42E98C", "timestamp": "2026-06-09 15:48", "customer_id": "C0018676", "amount": 8.14, "channel": "mobile", "country": "RO", "region": "Cluj", "merchant_category": "electronics", "segment": "new", "risk_score": 97.8}, {"transaction_id": "TXN053D8A2A92", "timestamp": "2026-06-09 14:31", "customer_id": "C0011993", "amount": 11.2, "channel": "mobile", "country": "RO", "region": "Timisoara", "merchant_category": "clothing", "segment": "new", "risk_score": 97.8}, {"transaction_id": "TXN893DE06DA8", "timestamp": "2026-06-24 16:01", "customer_id": "C0004134", "amount": 1143.09, "channel": "call_center", "country": "IN", "region": "Chennai", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 97.8}, {"transaction_id": "TXNE7556744EB", "timestamp": "2026-06-09 03:47", "customer_id": "C0013009", "amount": 1.82, "channel": "mobile", "country": "RO", "region": "Bucharest", "merchant_category": "electronics", "segment": "new", "risk_score": 97.8}, {"transaction_id": "TXN3B97C79CAA", "timestamp": "2026-06-25 05:09", "customer_id": "C0009844", "amount": 626.71, "channel": "call_center", "country": "NG", "region": "Port Harcourt", "merchant_category": "travel", "segment": "new", "risk_score": 97.8}, {"transaction_id": "TXN15CD4F84A7", "timestamp": "2026-06-09 12:11", "customer_id": "C0011332", "amount": 11.7, "channel": "mobile", "country": "RO", "region": "Constanta", "merchant_category": "electronics", "segment": "new", "risk_score": 97.8}, {"transaction_id": "TXN6CC5B47D8B", "timestamp": "2026-06-08 03:18", "customer_id": "C0029096", "amount": 1.54, "channel": "mobile", "country": "RO", "region": "Iasi", "merchant_category": "clothing", "segment": "new", "risk_score": 97.8}, {"transaction_id": "TXN7FBD46460E", "timestamp": "2026-06-08 22:39", "customer_id": "C0014944", "amount": 7.05, "channel": "mobile", "country": "RO", "region": "Iasi", "merchant_category": "clothing", "segment": "new", "risk_score": 97.8}, {"transaction_id": "TXN67BEEF5E4C", "timestamp": "2026-06-08 22:01", "customer_id": "C0029688", "amount": 7.15, "channel": "mobile", "country": "RO", "region": "Cluj", "merchant_category": "clothing", "segment": "dormant", "risk_score": 97.8}, {"transaction_id": "TXND32690E8C5", "timestamp": "2026-06-03 10:40", "customer_id": "C0008879", "amount": 67.26, "channel": "call_center", "country": "CA", "region": "Quebec", "merchant_category": "luxury", "segment": "regular", "risk_score": 97.8}, {"transaction_id": "TXN6000E1D440", "timestamp": "2026-06-07 12:58", "customer_id": "C0026661", "amount": 75.25, "channel": "call_center", "country": "US", "region": "Southwest", "merchant_category": "crypto_exchange", "segment": "dormant", "risk_score": 97.8}, {"transaction_id": "TXNE05669F714", "timestamp": "2026-06-08 02:57", "customer_id": "C0010287", "amount": 10.09, "channel": "mobile", "country": "RO", "region": "Timisoara", "merchant_category": "clothing", "segment": "dormant", "risk_score": 97.8}, {"transaction_id": "TXN42460FDD90", "timestamp": "2026-06-25 22:00", "customer_id": "C0020141", "amount": 452.89, "channel": "call_center", "country": "IN", "region": "Delhi", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 97.7}, {"transaction_id": "TXN67DF3B78BC", "timestamp": "2026-06-08 05:45", "customer_id": "C0019681", "amount": 2.81, "channel": "mobile", "country": "RO", "region": "Iasi", "merchant_category": "electronics", "segment": "new", "risk_score": 97.7}, {"transaction_id": "TXND42674673D", "timestamp": "2026-06-09 19:38", "customer_id": "C0015609", "amount": 12.17, "channel": "mobile", "country": "RO", "region": "Constanta", "merchant_category": "electronics", "segment": "new", "risk_score": 97.7}, {"transaction_id": "TXNF8C62667CB", "timestamp": "2026-06-14 06:23", "customer_id": "C0004517", "amount": 845.31, "channel": "pos", "country": "FR", "region": "\u00cele-de-France", "merchant_category": "entertainment", "segment": "high_value", "risk_score": 97.7}, {"transaction_id": "TXNC8898E3017", "timestamp": "2026-06-23 16:11", "customer_id": "C0010715", "amount": 137.76, "channel": "call_center", "country": "NG", "region": "Lagos", "merchant_category": "travel", "segment": "new", "risk_score": 97.7}, {"transaction_id": "TXN549661678F", "timestamp": "2026-06-08 04:25", "customer_id": "C0010029", "amount": 3.18, "channel": "mobile", "country": "RO", "region": "Iasi", "merchant_category": "clothing", "segment": "dormant", "risk_score": 97.7}, {"transaction_id": "TXN29A9C9936E", "timestamp": "2026-06-24 07:48", "customer_id": "C0019047", "amount": 588.14, "channel": "call_center", "country": "NG", "region": "Kano", "merchant_category": "travel", "segment": "new", "risk_score": 97.7}, {"transaction_id": "TXN410AA119A6", "timestamp": "2026-06-25 03:41", "customer_id": "C0013615", "amount": 680.48, "channel": "mobile", "country": "US", "region": "Southwest", "merchant_category": "luxury", "segment": "premium", "risk_score": 97.7}, {"transaction_id": "TXN4DBCFA324F", "timestamp": "2026-06-24 05:14", "customer_id": "C0013024", "amount": 216.46, "channel": "call_center", "country": "NG", "region": "Kano", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 97.7}, {"transaction_id": "TXNC49A320B52", "timestamp": "2026-05-30 07:47", "customer_id": "C0024732", "amount": 74.63, "channel": "mobile", "country": "NG", "region": "Lagos", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 97.7}, {"transaction_id": "TXNB6C6D6B3E6", "timestamp": "2026-06-08 17:19", "customer_id": "C0023447", "amount": 10.6, "channel": "mobile", "country": "RO", "region": "Iasi", "merchant_category": "electronics", "segment": "new", "risk_score": 97.7}, {"transaction_id": "TXNC5019CD99E", "timestamp": "2026-06-08 21:50", "customer_id": "C0016933", "amount": 10.36, "channel": "mobile", "country": "RO", "region": "Timisoara", "merchant_category": "electronics", "segment": "dormant", "risk_score": 97.7}, {"transaction_id": "TXN33201CAA8C", "timestamp": "2026-06-08 21:58", "customer_id": "C0024431", "amount": 8.08, "channel": "mobile", "country": "RO", "region": "Cluj", "merchant_category": "clothing", "segment": "new", "risk_score": 97.7}, {"transaction_id": "TXN78B5D53CB6", "timestamp": "2026-06-16 18:35", "customer_id": "C0017948", "amount": 50.72, "channel": "web", "country": "IN", "region": "Mumbai", "merchant_category": "travel", "segment": "new", "risk_score": 97.7}, {"transaction_id": "TXN0998F2F03E", "timestamp": "2026-06-18 10:36", "customer_id": "C0007437", "amount": 69.29, "channel": "web", "country": "DE", "region": "Hamburg", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 97.7}, {"transaction_id": "TXND685601E41", "timestamp": "2026-06-08 21:50", "customer_id": "C0011542", "amount": 12.31, "channel": "mobile", "country": "RO", "region": "Bucharest", "merchant_category": "clothing", "segment": "dormant", "risk_score": 97.7}, {"transaction_id": "TXN0FF67D1085", "timestamp": "2026-06-25 04:53", "customer_id": "C0026199", "amount": 669.7, "channel": "call_center", "country": "NG", "region": "Kano", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 97.6}, {"transaction_id": "TXN26DB9D1549", "timestamp": "2026-06-08 01:52", "customer_id": "C0019800", "amount": 1.8, "channel": "mobile", "country": "RO", "region": "Iasi", "merchant_category": "electronics", "segment": "new", "risk_score": 97.6}, {"transaction_id": "TXNCC11D3B170", "timestamp": "2026-06-22 06:18", "customer_id": "C0022587", "amount": 868.21, "channel": "call_center", "country": "IN", "region": "Delhi", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 97.6}, {"transaction_id": "TXN547ED4EDC9", "timestamp": "2026-06-22 12:01", "customer_id": "C0025217", "amount": 139.37, "channel": "call_center", "country": "NG", "region": "Port Harcourt", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 97.6}, {"transaction_id": "TXN4C549E8307", "timestamp": "2026-06-27 21:03", "customer_id": "C0015699", "amount": 37.36, "channel": "pos", "country": "BR", "region": "Minas Gerais", "merchant_category": "luxury", "segment": "new", "risk_score": 97.6}, {"transaction_id": "TXNF08897D02F", "timestamp": "2026-06-22 09:42", "customer_id": "C0025445", "amount": 716.64, "channel": "call_center", "country": "BR", "region": "Bahia", "merchant_category": "travel", "segment": "new", "risk_score": 97.6}, {"transaction_id": "TXN74BF902800", "timestamp": "2026-06-22 06:48", "customer_id": "C0002162", "amount": 585.21, "channel": "call_center", "country": "IN", "region": "Hyderabad", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 97.6}, {"transaction_id": "TXNACBA6F0288", "timestamp": "2026-06-22 06:23", "customer_id": "C0005162", "amount": 501.48, "channel": "call_center", "country": "BR", "region": "Minas Gerais", "merchant_category": "travel", "segment": "new", "risk_score": 97.6}, {"transaction_id": "TXN44DD1662B1", "timestamp": "2026-06-08 11:09", "customer_id": "C0029765", "amount": 13.14, "channel": "mobile", "country": "RO", "region": "Timisoara", "merchant_category": "electronics", "segment": "new", "risk_score": 97.6}, {"transaction_id": "TXNA834E39E31", "timestamp": "2026-06-07 17:14", "customer_id": "C0010196", "amount": 99.9, "channel": "mobile", "country": "US", "region": "Southwest", "merchant_category": "luxury", "segment": "dormant", "risk_score": 97.6}, {"transaction_id": "TXN1FBB2EEA26", "timestamp": "2026-06-13 07:45", "customer_id": "C0020225", "amount": 299.84, "channel": "web", "country": "RO", "region": "Cluj", "merchant_category": "crypto_exchange", "segment": "premium", "risk_score": 97.6}, {"transaction_id": "TXN689B37B0FF", "timestamp": "2026-06-09 18:31", "customer_id": "C0018791", "amount": 8.6, "channel": "mobile", "country": "RO", "region": "Bucharest", "merchant_category": "electronics", "segment": "new", "risk_score": 97.6}, {"transaction_id": "TXN2E2A4406B3", "timestamp": "2026-06-08 03:38", "customer_id": "C0028727", "amount": 5.89, "channel": "mobile", "country": "RO", "region": "Constanta", "merchant_category": "electronics", "segment": "new", "risk_score": 97.6}, {"transaction_id": "TXN46972ABBAC", "timestamp": "2026-06-24 10:50", "customer_id": "C0003234", "amount": 546.59, "channel": "call_center", "country": "NG", "region": "Lagos", "merchant_category": "travel", "segment": "new", "risk_score": 97.6}, {"transaction_id": "TXN77DFC2D62D", "timestamp": "2026-06-09 00:31", "customer_id": "C0004540", "amount": 13.53, "channel": "mobile", "country": "RO", "region": "Bucharest", "merchant_category": "electronics", "segment": "new", "risk_score": 97.6}, {"transaction_id": "TXN568EE82334", "timestamp": "2026-06-09 19:35", "customer_id": "C0023292", "amount": 6.68, "channel": "mobile", "country": "RO", "region": "Constanta", "merchant_category": "electronics", "segment": "new", "risk_score": 97.6}, {"transaction_id": "TXN4B56C785B9", "timestamp": "2026-06-06 18:12", "customer_id": "C0007721", "amount": 68.52, "channel": "mobile", "country": "US", "region": "Midwest", "merchant_category": "entertainment", "segment": "dormant", "risk_score": 97.6}, {"transaction_id": "TXNA418072834", "timestamp": "2026-06-24 09:19", "customer_id": "C0012707", "amount": 318.18, "channel": "call_center", "country": "BR", "region": "Bahia", "merchant_category": "travel", "segment": "new", "risk_score": 97.6}, {"transaction_id": "TXNF9BE20D324", "timestamp": "2026-06-09 11:56", "customer_id": "C0029317", "amount": 6.8, "channel": "mobile", "country": "RO", "region": "Bucharest", "merchant_category": "clothing", "segment": "dormant", "risk_score": 97.6}, {"transaction_id": "TXN83D738DC4F", "timestamp": "2026-06-24 11:58", "customer_id": "C0010934", "amount": 238.15, "channel": "call_center", "country": "BR", "region": "Bahia", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 97.6}, {"transaction_id": "TXN5F43B3E036", "timestamp": "2026-06-09 02:18", "customer_id": "C0011604", "amount": 7.19, "channel": "mobile", "country": "RO", "region": "Cluj", "merchant_category": "clothing", "segment": "new", "risk_score": 97.6}, {"transaction_id": "TXN77BFB2A7E4", "timestamp": "2026-06-08 14:49", "customer_id": "C0018722", "amount": 2.72, "channel": "mobile", "country": "RO", "region": "Constanta", "merchant_category": "clothing", "segment": "new", "risk_score": 97.6}, {"transaction_id": "TXN0CB0A50C27", "timestamp": "2026-06-08 15:44", "customer_id": "C0027041", "amount": 5.5, "channel": "mobile", "country": "RO", "region": "Constanta", "merchant_category": "electronics", "segment": "new", "risk_score": 97.6}, {"transaction_id": "TXN341D9EB537", "timestamp": "2026-06-09 04:45", "customer_id": "C0015426", "amount": 4.05, "channel": "mobile", "country": "RO", "region": "Timisoara", "merchant_category": "electronics", "segment": "dormant", "risk_score": 97.6}, {"transaction_id": "TXN9791D7DA0F", "timestamp": "2026-06-08 06:54", "customer_id": "C0020406", "amount": 5.21, "channel": "mobile", "country": "RO", "region": "Cluj", "merchant_category": "electronics", "segment": "new", "risk_score": 97.6}, {"transaction_id": "TXN0409FF187D", "timestamp": "2026-06-26 00:52", "customer_id": "C0003379", "amount": 311.94, "channel": "web", "country": "FR", "region": "Brittany", "merchant_category": "entertainment", "segment": "high_value", "risk_score": 97.6}, {"transaction_id": "TXN76AC477765", "timestamp": "2026-06-09 22:19", "customer_id": "C0013947", "amount": 7.25, "channel": "mobile", "country": "RO", "region": "Cluj", "merchant_category": "electronics", "segment": "new", "risk_score": 97.6}, {"transaction_id": "TXN01394C7B1D", "timestamp": "2026-06-09 19:52", "customer_id": "C0004234", "amount": 2.68, "channel": "mobile", "country": "RO", "region": "Cluj", "merchant_category": "electronics", "segment": "dormant", "risk_score": 97.6}, {"transaction_id": "TXNE181CC7C5C", "timestamp": "2026-06-08 01:35", "customer_id": "C0000961", "amount": 1.13, "channel": "mobile", "country": "RO", "region": "Timisoara", "merchant_category": "electronics", "segment": "new", "risk_score": 97.6}, {"transaction_id": "TXNAD242DB88C", "timestamp": "2026-06-09 21:42", "customer_id": "C0001552", "amount": 6.46, "channel": "mobile", "country": "RO", "region": "Timisoara", "merchant_category": "clothing", "segment": "dormant", "risk_score": 97.5}, {"transaction_id": "TXN8F74DB8B79", "timestamp": "2026-06-09 02:26", "customer_id": "C0012506", "amount": 10.41, "channel": "mobile", "country": "RO", "region": "Bucharest", "merchant_category": "clothing", "segment": "dormant", "risk_score": 97.5}, {"transaction_id": "TXN641368C7D5", "timestamp": "2026-06-09 05:40", "customer_id": "C0016808", "amount": 13.94, "channel": "mobile", "country": "RO", "region": "Iasi", "merchant_category": "clothing", "segment": "dormant", "risk_score": 97.5}, {"transaction_id": "TXNFA348A6E10", "timestamp": "2026-06-09 15:19", "customer_id": "C0024308", "amount": 6.19, "channel": "mobile", "country": "RO", "region": "Iasi", "merchant_category": "clothing", "segment": "new", "risk_score": 97.5}, {"transaction_id": "TXN1C428970FB", "timestamp": "2026-06-24 02:50", "customer_id": "C0021172", "amount": 335.86, "channel": "call_center", "country": "IN", "region": "Hyderabad", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 97.5}, {"transaction_id": "TXN2676DE4FEE", "timestamp": "2026-06-08 18:03", "customer_id": "C0026645", "amount": 11.35, "channel": "mobile", "country": "RO", "region": "Cluj", "merchant_category": "clothing", "segment": "new", "risk_score": 97.5}, {"transaction_id": "TXN8CF168F8B8", "timestamp": "2026-06-20 05:17", "customer_id": "C0013126", "amount": 401.54, "channel": "web", "country": "NG", "region": "Abuja", "merchant_category": "luxury", "segment": "high_value", "risk_score": 97.5}, {"transaction_id": "TXNB5EB8E29B4", "timestamp": "2026-06-08 21:46", "customer_id": "C0020509", "amount": 3.58, "channel": "mobile", "country": "RO", "region": "Constanta", "merchant_category": "electronics", "segment": "new", "risk_score": 97.5}, {"transaction_id": "TXN131C3A21D7", "timestamp": "2026-06-08 16:28", "customer_id": "C0022507", "amount": 5.74, "channel": "mobile", "country": "RO", "region": "Constanta", "merchant_category": "electronics", "segment": "new", "risk_score": 97.5}, {"transaction_id": "TXN3874FADCD3", "timestamp": "2026-06-22 21:52", "customer_id": "C0006860", "amount": 491.13, "channel": "call_center", "country": "IN", "region": "Hyderabad", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 97.5}, {"transaction_id": "TXNEE1818493B", "timestamp": "2026-06-08 10:50", "customer_id": "C0029707", "amount": 11.6, "channel": "mobile", "country": "RO", "region": "Cluj", "merchant_category": "clothing", "segment": "new", "risk_score": 97.5}, {"transaction_id": "TXN9A7F030470", "timestamp": "2026-06-08 01:36", "customer_id": "C0001196", "amount": 40.11, "channel": "web", "country": "UK", "region": "Wales", "merchant_category": "electronics", "segment": "dormant", "risk_score": 97.5}, {"transaction_id": "TXN0E4AD552EA", "timestamp": "2026-06-19 06:59", "customer_id": "C0022443", "amount": 262.4, "channel": "web", "country": "BR", "region": "S\u00e3o Paulo", "merchant_category": "grocery", "segment": "premium", "risk_score": 97.5}, {"transaction_id": "TXNE16616D016", "timestamp": "2026-06-22 23:06", "customer_id": "C0025213", "amount": 342.96, "channel": "call_center", "country": "IN", "region": "Delhi", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 97.5}, {"transaction_id": "TXN48BFF0BD62", "timestamp": "2026-06-22 09:12", "customer_id": "C0008683", "amount": 306.7, "channel": "call_center", "country": "IN", "region": "Delhi", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 97.5}, {"transaction_id": "TXNEC6E8C09F9", "timestamp": "2026-06-25 20:24", "customer_id": "C0001840", "amount": 636.88, "channel": "call_center", "country": "BR", "region": "Minas Gerais", "merchant_category": "travel", "segment": "new", "risk_score": 97.5}, {"transaction_id": "TXNB1DDA49390", "timestamp": "2026-06-15 10:34", "customer_id": "C0028416", "amount": 184.31, "channel": "mobile", "country": "BR", "region": "Rio", "merchant_category": "travel", "segment": "regular", "risk_score": 97.4}, {"transaction_id": "TXN667ED21699", "timestamp": "2026-06-08 00:57", "customer_id": "C0014255", "amount": 5.35, "channel": "mobile", "country": "RO", "region": "Timisoara", "merchant_category": "electronics", "segment": "new", "risk_score": 97.4}, {"transaction_id": "TXNE285A73BB6", "timestamp": "2026-06-25 14:55", "customer_id": "C0020451", "amount": 536.63, "channel": "call_center", "country": "IN", "region": "Delhi", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 97.4}, {"transaction_id": "TXNC37BC929B3", "timestamp": "2026-06-22 03:45", "customer_id": "C0005900", "amount": 178.29, "channel": "call_center", "country": "NG", "region": "Lagos", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 97.4}, {"transaction_id": "TXN384198EA31", "timestamp": "2026-06-08 01:42", "customer_id": "C0007308", "amount": 6.96, "channel": "mobile", "country": "RO", "region": "Iasi", "merchant_category": "clothing", "segment": "dormant", "risk_score": 97.4}, {"transaction_id": "TXNA36BB940F1", "timestamp": "2026-06-13 03:35", "customer_id": "C0011473", "amount": 145.87, "channel": "web", "country": "DE", "region": "Bavaria", "merchant_category": "crypto_exchange", "segment": "regular", "risk_score": 97.4}, {"transaction_id": "TXN4B4E999A38", "timestamp": "2026-06-25 11:37", "customer_id": "C0022562", "amount": 921.77, "channel": "call_center", "country": "IN", "region": "Bangalore", "merchant_category": "travel", "segment": "new", "risk_score": 97.4}, {"transaction_id": "TXN8BC7C574B3", "timestamp": "2026-06-08 10:47", "customer_id": "C0026797", "amount": 1.64, "channel": "mobile", "country": "RO", "region": "Bucharest", "merchant_category": "clothing", "segment": "dormant", "risk_score": 97.4}, {"transaction_id": "TXNFED18D1A4F", "timestamp": "2026-06-08 10:26", "customer_id": "C0016326", "amount": 1.27, "channel": "mobile", "country": "RO", "region": "Bucharest", "merchant_category": "electronics", "segment": "new", "risk_score": 97.4}, {"transaction_id": "TXN3BBE6963DE", "timestamp": "2026-06-09 20:07", "customer_id": "C0022079", "amount": 9.35, "channel": "mobile", "country": "RO", "region": "Timisoara", "merchant_category": "electronics", "segment": "dormant", "risk_score": 97.4}, {"transaction_id": "TXN6F24CFC67B", "timestamp": "2026-06-08 02:25", "customer_id": "C0013153", "amount": 3.85, "channel": "mobile", "country": "RO", "region": "Bucharest", "merchant_category": "clothing", "segment": "new", "risk_score": 97.4}, {"transaction_id": "TXNE0A885F1E0", "timestamp": "2026-06-08 22:47", "customer_id": "C0017425", "amount": 11.86, "channel": "mobile", "country": "RO", "region": "Timisoara", "merchant_category": "clothing", "segment": "new", "risk_score": 97.4}, {"transaction_id": "TXN0E88A1E14F", "timestamp": "2026-06-08 22:51", "customer_id": "C0019298", "amount": 9.0, "channel": "mobile", "country": "RO", "region": "Constanta", "merchant_category": "electronics", "segment": "dormant", "risk_score": 97.4}, {"transaction_id": "TXN0259694D12", "timestamp": "2026-06-24 04:25", "customer_id": "C0008148", "amount": 856.44, "channel": "call_center", "country": "NG", "region": "Port Harcourt", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 97.4}, {"transaction_id": "TXN6A7014AE8E", "timestamp": "2026-05-31 19:42", "customer_id": "C0000110", "amount": 756.89, "channel": "pos", "country": "FR", "region": "Normandy", "merchant_category": "travel", "segment": "high_value", "risk_score": 97.4}, {"transaction_id": "TXN58B9720984", "timestamp": "2026-06-08 08:21", "customer_id": "C0019414", "amount": 10.41, "channel": "mobile", "country": "RO", "region": "Timisoara", "merchant_category": "clothing", "segment": "new", "risk_score": 97.4}, {"transaction_id": "TXN8039FBA94A", "timestamp": "2026-06-25 01:11", "customer_id": "C0004690", "amount": 813.75, "channel": "call_center", "country": "IN", "region": "Delhi", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 97.4}, {"transaction_id": "TXN283310C7EF", "timestamp": "2026-06-09 04:01", "customer_id": "C0007649", "amount": 10.34, "channel": "mobile", "country": "RO", "region": "Cluj", "merchant_category": "electronics", "segment": "new", "risk_score": 97.4}, {"transaction_id": "TXN82D702FFAC", "timestamp": "2026-06-08 01:53", "customer_id": "C0014146", "amount": 6.3, "channel": "mobile", "country": "RO", "region": "Bucharest", "merchant_category": "clothing", "segment": "dormant", "risk_score": 97.4}, {"transaction_id": "TXNDCCDE42FC4", "timestamp": "2026-06-09 00:38", "customer_id": "C0021606", "amount": 3.51, "channel": "mobile", "country": "RO", "region": "Constanta", "merchant_category": "electronics", "segment": "dormant", "risk_score": 97.4}, {"transaction_id": "TXN084BBBFB4D", "timestamp": "2026-06-25 06:46", "customer_id": "C0019980", "amount": 400.69, "channel": "call_center", "country": "BR", "region": "S\u00e3o Paulo", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 97.4}, {"transaction_id": "TXN59C92E7951", "timestamp": "2026-06-08 05:47", "customer_id": "C0029551", "amount": 5.92, "channel": "mobile", "country": "RO", "region": "Constanta", "merchant_category": "clothing", "segment": "dormant", "risk_score": 97.4}, {"transaction_id": "TXN43ADD8B38C", "timestamp": "2026-06-09 04:33", "customer_id": "C0020408", "amount": 579.21, "channel": "call_center", "country": "BR", "region": "Paran\u00e1", "merchant_category": "crypto_exchange", "segment": "high_value", "risk_score": 97.4}, {"transaction_id": "TXN15D32F0564", "timestamp": "2026-06-23 10:54", "customer_id": "C0020638", "amount": 483.78, "channel": "call_center", "country": "IN", "region": "Bangalore", "merchant_category": "travel", "segment": "new", "risk_score": 97.3}, {"transaction_id": "TXN7A1B4D25C9", "timestamp": "2026-06-22 00:54", "customer_id": "C0005181", "amount": 327.7, "channel": "call_center", "country": "NG", "region": "Ibadan", "merchant_category": "crypto_exchange", "segment": "new", "risk_score": 97.3}, {"transaction_id": "TXN3FE9BE7803", "timestamp": "2026-06-25 12:03", "customer_id": "C0023434", "amount": 1197.09, "channel": "call_center", "country": "BR", "region": "S\u00e3o Paulo", "merchant_category": "travel", "segment": "new", "risk_score": 97.3}, {"transaction_id": "TXNA655BE85E8", "timestamp": "2026-06-25 09:28", "customer_id": "C0022732", "amount": 541.38, "channel": "call_center", "country": "NG", "region": "Abuja", "merchant_category": "travel", "segment": "new", "risk_score": 97.3}, {"transaction_id": "TXNBDA6919B42", "timestamp": "2026-06-09 00:20", "customer_id": "C0029829", "amount": 13.88, "channel": "mobile", "country": "RO", "region": "Timisoara", "merchant_category": "clothing", "segment": "new", "risk_score": 97.3}, {"transaction_id": "TXN811903F43F", "timestamp": "2026-06-09 15:53", "customer_id": "C0020292", "amount": 10.26, "channel": "mobile", "country": "RO", "region": "Constanta", "merchant_category": "electronics", "segment": "new", "risk_score": 97.3}, {"transaction_id": "TXN6ECEA694DC", "timestamp": "2026-06-09 06:35", "customer_id": "C0015006", "amount": 2.81, "channel": "mobile", "country": "RO", "region": "Iasi", "merchant_category": "electronics", "segment": "dormant", "risk_score": 97.3}, {"transaction_id": "TXNE32389C541", "timestamp": "2026-06-09 07:16", "customer_id": "C0019969", "amount": 2.98, "channel": "mobile", "country": "RO", "region": "Constanta", "merchant_category": "electronics", "segment": "new", "risk_score": 97.3}, {"transaction_id": "TXN34B6813E50", "timestamp": "2026-06-24 23:10", "customer_id": "C0022218", "amount": 472.06, "channel": "call_center", "country": "IN", "region": "Delhi", "merchant_category": "travel", "segment": "new", "risk_score": 97.3}], "scenarios": [{"name": "Scenario 1 \u2013 Mobile Card-Testing (Romania)", "period": "Days 10-12 (Jun 8-10)", "description": "A bot network tested stolen card numbers via the mobile app targeting Romanian users. ~2,800 micro-transactions (\u20ac1\u2013\u20ac15) across electronics and clothing. High transaction velocity from shared IP blocks."}, {"name": "Scenario 2 \u2013 High-Value Web Fraud (UK / DE)", "period": "Days 18-22 (Jun 16-20)", "description": "~1,400 high-value fraudulent purchases ($500\u2013$5,000+) on the web channel in UK and Germany. Concentrated in luxury, electronics, and travel merchant categories using compromised premium account credentials."}, {"name": "Scenario 3 \u2013 New-Customer Call-Center Wave (NG / BR / IN)", "period": "Days 24-28 (Jun 22-26)", "description": "~1,200 fraudulent transactions via the call-center channel targeting newly-onboarded customers in Nigeria, Brazil, and India. High proportion directed to crypto exchanges and travel \u2014 typical money-mule laundering path."}]};
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const fmt = (n,d=0) => typeof n==='number' ? n.toLocaleString('en-US',{maximumFractionDigits:d}) : n;
+const fmtAmt = n => '$'+fmt(Math.round(n));
+const fmtRate = n => n.toFixed(2)+'%';
+const badgeHTML = lvl => `<span class="badge ${lvl}">${lvl}</span>`;
+
+const COLORS = {
+  mobile:'#4f8ef7', web:'#a78bfa', pos:'#34d399', call_center:'#fb923c', api:'#f472b6',
+  new:'#f87171', regular:'#60a5fa', premium:'#a78bfa', high_value:'#34d399', dormant:'#fbbf24',
+};
+const CH_COLORS  = ['#4f8ef7','#a78bfa','#34d399','#fb923c','#f472b6'];
+const SEG_COLORS = ['#f87171','#60a5fa','#a78bfa','#34d399','#fbbf24'];
+const GEO_COLORS = ['#4f8ef7','#34d399','#f59e0b','#ef4444','#a78bfa','#fb923c','#f472b6','#22d3ee','#84cc16','#f87171'];
+
+// ── Page nav ──────────────────────────────────────────────────────────────────
+let chartsInit = {};
+function showPage(name) {
+  document.querySelectorAll('[id^="page-"]').forEach(el => el.style.display='none');
+  document.getElementById('page-'+name).style.display='block';
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  document.querySelector(`[onclick="showPage('${name}')"]`).classList.add('active');
+  if (!chartsInit[name]) { buildPage(name); chartsInit[name]=true; }
+}
+
+// ── Chart factory ─────────────────────────────────────────────────────────────
+function makeChart(id, type, labels, datasets, opts={}) {
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  return new Chart(ctx, {
+    type,
+    data: { labels, datasets },
+    options: {
+      responsive:true, maintainAspectRatio:true,
+      plugins:{ legend:{ labels:{ color:'#7a82a0', font:{size:11} } } },
+      scales: type==='pie'||type==='doughnut' ? {} : {
+        x:{ ticks:{color:'#7a82a0',font:{size:10}}, grid:{color:'#1e2235'} },
+        y:{ ticks:{color:'#7a82a0',font:{size:10}}, grid:{color:'#1e2235'} },
+        ...(opts.scales||{})
+      },
+      ...opts
+    }
+  });
+}
+
+// ── Overview ──────────────────────────────────────────────────────────────────
+function buildOverview() {
+  const K = D.kpis;
+  document.getElementById('kpi-vol').textContent   = fmt(K.total_volume);
+  document.getElementById('kpi-fraud').textContent = fmt(K.total_fraud);
+  document.getElementById('kpi-fr').textContent    = 'Fraud rate: '+fmtRate(K.fraud_rate);
+  document.getElementById('kpi-loss').textContent  = fmtAmt(K.est_loss);
+  document.getElementById('kpi-amt').textContent   = fmtAmt(K.total_amount);
+  document.getElementById('kpi-alerts').textContent= K.n_critical+' Critical';
+  document.getElementById('kpi-alert-sub').textContent = K.n_elevated+' Elevated';
+
+  // Scenarios
+  const sc = document.getElementById('scenarios-container');
+  D.scenarios.forEach(s => {
+    sc.innerHTML += `<div class="scenario-pill">
+      <h4>${s.name}</h4><div class="period">${s.period}</div><p>${s.description}</p></div>`;
+  });
+
+  // Daily volume + fraud
+  const labels = D.daily.map(r=>r.date.slice(5));
+  const vol    = D.daily.map(r=>r.volume);
+  const fraud  = D.daily.map(r=>r.fraud_count);
+  makeChart('chart-daily','bar',labels,[
+    {label:'Total Transactions',data:vol,backgroundColor:'#1e3a5f',borderColor:'#4f8ef7',borderWidth:1,borderRadius:2},
+    {label:'Fraud Transactions',data:fraud,backgroundColor:'#7f1d1d',borderColor:'#ef4444',borderWidth:1,borderRadius:2},
+  ]);
+
+  const fr = D.daily.map(r=>r.fraud_rate);
+  makeChart('chart-fr-daily','line',labels,[
+    {label:'Fraud Rate %',data:fr,borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,.1)',
+      fill:true,tension:.3,pointRadius:2}
+  ]);
+
+  // Channel bar
+  const chs = D.ch_summary;
+  makeChart('chart-ch-bar','bar',chs.map(r=>r.channel),
+    [{label:'Fraud Count',data:chs.map(r=>r.fraud_count),
+      backgroundColor:CH_COLORS,borderRadius:5}],
+    {plugins:{legend:{display:false}}});
+
+  // Segment bar
+  const segs = D.seg_summary;
+  makeChart('chart-seg-bar','bar',segs.map(r=>r.segment),
+    [{label:'Fraud Count',data:segs.map(r=>r.fraud_count),
+      backgroundColor:SEG_COLORS,borderRadius:5}],
+    {plugins:{legend:{display:false}}});
+
+  // Alert summary table
+  const t = document.getElementById('alert-summary-table');
+  t.innerHTML = `<thead><tr><th>Alert ID</th><th>Type</th><th>Bucket</th>
+    <th>Alert Level</th><th>Fraud Count</th><th>Fraud Rate</th><th>Action</th></tr></thead>`;
+  const tb = document.createElement('tbody');
+  D.alerts.forEach(a => {
+    const tr = document.createElement('tr');
+    tr.style.cursor='pointer';
+    tr.innerHTML = `<td>${a.id}</td><td>${a.type}</td><td>${a.bucket}</td>
+      <td>${badgeHTML(a.alert_level)}</td><td>${fmt(a.fraud_count)}</td>
+      <td style="color:var(--red)">${fmtRate(a.fraud_rate)}</td>
+      <td><button style="font-size:11px;padding:3px 10px;border:1px solid var(--border);
+        background:var(--surface2);color:var(--text);border-radius:6px;cursor:pointer"
+        onclick="openCase('${a.id}')">View Cases</button></td>`;
+    tb.appendChild(tr);
+  });
+  t.appendChild(tb);
+}
+
+// ── Channels ──────────────────────────────────────────────────────────────────
+function buildChannels() {
+  const chs = D.ch_summary;
+  makeChart('chart-ch-rate','bar',chs.map(r=>r.channel),
+    [{label:'Fraud Rate %',data:chs.map(r=>r.fraud_rate),backgroundColor:CH_COLORS,borderRadius:5}],
+    {plugins:{legend:{display:false}}});
+  makeChart('chart-ch-vol','bar',chs.map(r=>r.channel),
+    [{label:'Total Transactions',data:chs.map(r=>r.volume),backgroundColor:CH_COLORS,borderRadius:5}],
+    {plugins:{legend:{display:false}}});
+
+  // Daily by channel
+  const dates = [...new Set(D.ch_daily.map(r=>r.date))].sort();
+  const channels = [...new Set(D.ch_daily.map(r=>r.channel))];
+  const byDate = {};
+  D.ch_daily.forEach(r=>{ if(!byDate[r.date]) byDate[r.date]={}; byDate[r.date][r.channel]=r.fraud_count; });
+  const datasets = channels.map((ch,i)=>({
+    label:ch, data:dates.map(d=>(byDate[d]&&byDate[d][ch])||0),
+    backgroundColor:CH_COLORS[i], borderColor:CH_COLORS[i], fill:false, tension:.3,
+    pointRadius:1,
+  }));
+  makeChart('chart-ch-daily','line',dates.map(d=>d.slice(5)),datasets);
+
+  // Table
+  const t = document.getElementById('channel-table');
+  t.innerHTML=`<thead><tr><th>Channel</th><th>Volume</th><th>Fraud Count</th>
+    <th>Fraud Rate</th><th>Avg Amount</th><th>Total Amount</th><th>Status</th></tr></thead>`;
+  const tb=document.createElement('tbody');
+  chs.forEach(r=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td><b>${r.channel}</b></td><td>${fmt(r.volume)}</td>
+      <td style="color:var(--red)">${fmt(r.fraud_count)}</td>
+      <td style="color:var(--red)">${fmtRate(r.fraud_rate)}</td>
+      <td>${fmtAmt(r.avg_amount)}</td><td>${fmtAmt(r.total_amount)}</td>
+      <td>${badgeHTML(r.alert_level)}</td>`;
+    tb.appendChild(tr);
+  });
+  t.appendChild(tb);
+}
+
+// ── Geography ─────────────────────────────────────────────────────────────────
+function buildGeography() {
+  const countries = D.country.slice().sort((a,b)=>b.fraud_count-a.fraud_count);
+  makeChart('chart-country-bar','bar',countries.map(r=>r.country),
+    [{label:'Fraud Count',data:countries.map(r=>r.fraud_count),
+      backgroundColor:GEO_COLORS,borderRadius:5}],
+    {plugins:{legend:{display:false}}});
+  const byRate = countries.slice().sort((a,b)=>b.fraud_rate-a.fraud_rate);
+  makeChart('chart-country-rate','bar',byRate.map(r=>r.country),
+    [{label:'Fraud Rate %',data:byRate.map(r=>r.fraud_rate),
+      backgroundColor:byRate.map(r=>r.alert_level==='Critical'?'#ef4444':
+        r.alert_level==='Elevated'?'#f59e0b':'#22c55e'),borderRadius:5}],
+    {plugins:{legend:{display:false}}});
+
+  const t = document.getElementById('geo-table');
+  t.innerHTML=`<thead><tr><th>Country</th><th>Region</th><th>Volume</th>
+    <th>Fraud Count</th><th>Fraud Rate</th><th>Total Amount</th><th>Alert</th><th></th></tr></thead>`;
+  const tb=document.createElement('tbody');
+  D.geo.slice(0,20).forEach(r=>{
+    const tr=document.createElement('tr'); tr.style.cursor='pointer';
+    tr.innerHTML=`<td>${r.country}</td><td>${r.region}</td><td>${fmt(r.volume)}</td>
+      <td style="color:var(--red)">${fmt(r.fraud_count)}</td>
+      <td style="color:${r.alert_level==='Critical'?'var(--red)':r.alert_level==='Elevated'?'var(--amber)':'var(--green)'}">
+        ${fmtRate(r.fraud_rate)}</td>
+      <td>${fmtAmt(r.total_amount)}</td><td>${badgeHTML(r.alert_level)}</td>
+      <td><button style="font-size:11px;padding:3px 10px;border:1px solid var(--border);
+        background:var(--surface2);color:var(--text);border-radius:6px;cursor:pointer"
+        onclick="openCaseGeo('${r.country}','${r.region}')">Cases</button></td>`;
+    tb.appendChild(tr);
+  });
+  t.appendChild(tb);
+}
+
+// ── Segments ──────────────────────────────────────────────────────────────────
+function buildSegments() {
+  const segs = D.seg_summary;
+  makeChart('chart-seg-rate','bar',segs.map(r=>r.segment),
+    [{label:'Fraud Rate %',data:segs.map(r=>r.fraud_rate),backgroundColor:SEG_COLORS,borderRadius:5}],
+    {plugins:{legend:{display:false}}});
+  makeChart('chart-seg-vol','bar',segs.map(r=>r.segment),
+    [{label:'Fraud Count',data:segs.map(r=>r.fraud_count),backgroundColor:SEG_COLORS,borderRadius:5}],
+    {plugins:{legend:{display:false}}});
+
+  // Daily segments
+  const dates=[...new Set(D.seg_daily.map(r=>r.date))].sort();
+  const segments=[...new Set(D.seg_daily.map(r=>r.segment))];
+  const bySeg={};
+  D.seg_daily.forEach(r=>{if(!bySeg[r.date])bySeg[r.date]={};bySeg[r.date][r.segment]=r.fraud_count;});
+  const sdsets=segments.map((s,i)=>({
+    label:s,data:dates.map(d=>(bySeg[d]&&bySeg[d][s])||0),
+    backgroundColor:SEG_COLORS[i],borderColor:SEG_COLORS[i],fill:false,tension:.3,pointRadius:1
+  }));
+  makeChart('chart-seg-daily','line',dates.map(d=>d.slice(5)),sdsets);
+
+  // Merchant
+  const mc=D.merchant.slice().sort((a,b)=>b.fraud_count-a.fraud_count);
+  makeChart('chart-mc-bar','bar',mc.map(r=>r.merchant_category),
+    [{label:'Fraud Count',data:mc.map(r=>r.fraud_count),
+      backgroundColor:mc.map(r=>r.alert_level==='Critical'?'#ef4444':
+        r.alert_level==='Elevated'?'#f59e0b':'#4f8ef7'),borderRadius:5}],
+    {plugins:{legend:{display:false}},
+     scales:{x:{ticks:{color:'#7a82a0',font:{size:10},maxRotation:45}},y:{ticks:{color:'#7a82a0',font:{size:10}}},
+       ...({})} });
+
+  // Seg table
+  const t=document.getElementById('seg-table');
+  t.innerHTML=`<thead><tr><th>Segment</th><th>Fraud Count</th><th>Fraud Rate</th><th>Avg $</th><th>Alert</th></tr></thead>`;
+  const tb=document.createElement('tbody');
+  segs.forEach(r=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td><b>${r.segment}</b></td>
+      <td style="color:var(--red)">${fmt(r.fraud_count)}</td>
+      <td style="color:var(--red)">${fmtRate(r.fraud_rate)}</td>
+      <td>${fmtAmt(r.avg_amount)}</td><td>${badgeHTML(r.alert_level)}</td>`;
+    tb.appendChild(tr);
+  });
+  t.appendChild(tb);
+}
+
+// ── Alerts ────────────────────────────────────────────────────────────────────
+let currentFilter='all';
+function buildAlerts() { filterAlerts('all'); }
+
+function filterAlerts(f, btn) {
+  currentFilter=f;
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  const list=document.getElementById('alert-list');
+  list.innerHTML='';
+  const filtered=D.alerts.filter(a=>{
+    if(f==='all') return true;
+    if(f==='Critical') return a.alert_level==='Critical';
+    return a.type===f;
+  });
+  filtered.forEach(a=>{
+    const card=document.createElement('div');
+    card.className=`alert-card ${a.alert_level}`;
+    card.innerHTML=`
+      <div class="alert-card-header">
+        <span class="id">${a.id}</span>
+        <span class="bucket">${a.bucket}</span>
+        ${badgeHTML(a.alert_level)}
+        <span style="font-size:11px;color:var(--muted);background:var(--surface2);
+          padding:2px 8px;border-radius:6px">${a.type}</span>
+      </div>
+      <div class="alert-meta">
+        <span>Fraud: <b style="color:var(--red)">${fmt(a.fraud_count)}</b></span>
+        <span>Rate: <b style="color:var(--red)">${fmtRate(a.fraud_rate)}</b></span>
+        <span>Volume: <b>${fmt(a.volume)}</b></span>
+      </div>
+      <div class="alert-reason">${a.reason}</div>
+      <div style="margin-top:10px">
+        <button onclick="openCase('${a.id}')" style="font-size:12px;padding:6px 14px;
+          background:var(--accent);color:#fff;border:none;border-radius:7px;cursor:pointer;font-weight:600">
+          📂 Open Case View →</button>
+      </div>`;
+    list.appendChild(card);
+  });
+}
+
+// ── Case View Modal ───────────────────────────────────────────────────────────
+function openCase(alertId) {
+  const a = D.alerts.find(x=>x.id===alertId);
+  if(!a) return;
+  document.getElementById('modal-title').textContent = `Case View — ${a.bucket}`;
+  document.getElementById('modal-sub').textContent   = `Alert ${a.id} · ${a.alert_level} · ${a.type}`;
+  document.getElementById('modal-steps').textContent = '⚡ Next Steps: '+a.next_steps;
+  document.getElementById('modal-stats').innerHTML   =
+    `<div class="stat-box"><div class="sl">Fraud Count</div>
+      <div class="sv" style="color:var(--red)">${fmt(a.fraud_count)}</div></div>
+     <div class="stat-box"><div class="sl">Fraud Rate</div>
+      <div class="sv" style="color:var(--red)">${fmtRate(a.fraud_rate)}</div></div>
+     <div class="stat-box"><div class="sl">Total Volume</div>
+      <div class="sv">${fmt(a.volume)}</div></div>`;
+
+  // Filter cases by bucket keyword
+  const bucketParts = a.bucket.split(' / ');
+  let cases = D.cases.filter(c => {
+    if(a.type==='Channel') return c.channel===a.bucket;
+    if(a.type==='Segment') return c.segment===a.bucket;
+    if(a.type==='Geography') {
+      return c.country===bucketParts[0] && (bucketParts.length<2||c.region===bucketParts[1]);
+    }
+    return true;
+  }).slice(0,30);
+
+  const t=document.getElementById('modal-table');
+  t.innerHTML=`<thead><tr><th>Txn ID</th><th>Time</th><th>Customer</th>
+    <th>Amount</th><th>Channel</th><th>Country/Region</th>
+    <th>Merchant Cat</th><th>Segment</th><th>Risk Score</th></tr></thead>`;
+  const tb=document.createElement('tbody');
+  (cases.length?cases:D.cases.slice(0,20)).forEach(c=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td style="font-size:11px;font-family:monospace">${c.transaction_id}</td>
+      <td style="font-size:11px">${c.timestamp}</td>
+      <td style="font-size:11px;font-family:monospace">${c.customer_id}</td>
+      <td style="color:var(--amber)">$${fmt(c.amount,2)}</td>
+      <td>${c.channel}</td><td>${c.country}/${c.region}</td>
+      <td>${c.merchant_category}</td><td>${c.segment}</td>
+      <td style="color:${c.risk_score>80?'var(--red)':c.risk_score>60?'var(--amber)':'var(--green)'};font-weight:700">
+        ${c.risk_score}</td>`;
+    tb.appendChild(tr);
+  });
+  t.appendChild(tb);
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function openCaseGeo(country, region) {
+  const a = D.alerts.find(x=>x.bucket===`${country} / ${region}`) ||
+    { id:`GEO-${country}`, bucket:`${country} / ${region}`, type:'Geography',
+      alert_level:'Normal', fraud_count:0, fraud_rate:0, volume:0,
+      reason:'Region case view', next_steps:'Review transactions for anomalies.' };
+  openCase(a.id);
+  // Override filter
+  const cases = D.cases.filter(c=>c.country===country && c.region===region).slice(0,30);
+  const t=document.getElementById('modal-table');
+  t.innerHTML=`<thead><tr><th>Txn ID</th><th>Time</th><th>Customer</th>
+    <th>Amount</th><th>Channel</th><th>Country/Region</th>
+    <th>Merchant Cat</th><th>Segment</th><th>Risk Score</th></tr></thead>`;
+  const tb=document.createElement('tbody');
+  (cases.length?cases:D.cases.slice(0,10)).forEach(c=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td style="font-size:11px;font-family:monospace">${c.transaction_id}</td>
+      <td style="font-size:11px">${c.timestamp}</td>
+      <td style="font-size:11px;font-family:monospace">${c.customer_id}</td>
+      <td style="color:var(--amber)">$${fmt(c.amount,2)}</td>
+      <td>${c.channel}</td><td>${c.country}/${c.region}</td>
+      <td>${c.merchant_category}</td><td>${c.segment}</td>
+      <td style="color:${c.risk_score>80?'var(--red)':c.risk_score>60?'var(--amber)':'var(--green)'};font-weight:700">
+        ${c.risk_score}</td>`;
+    tb.appendChild(tr);
+  });
+  t.appendChild(tb);
+}
+
+function closeModal(e) {
+  if(!e||e.target===document.getElementById('modal-overlay'))
+    document.getElementById('modal-overlay').classList.remove('open');
+}
+
+// ── Page builder router ───────────────────────────────────────────────────────
+function buildPage(name) {
+  if(name==='overview')  buildOverview();
+  if(name==='channels')  buildChannels();
+  if(name==='geography') buildGeography();
+  if(name==='segments')  buildSegments();
+  if(name==='alerts')    buildAlerts();
+}
+
+// Init
+buildPage('overview');
+chartsInit['overview']=true;
+document.getElementById('alert-count').textContent = D.kpis.n_critical + D.kpis.n_elevated;
+</script>
+</body>
+</html>
