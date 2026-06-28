@@ -45,10 +45,8 @@ python fraud_gen.py
 This produces `fraud_data_clean.json` (~108 KB) with 150,400 transactions, pre-aggregated analytics tables, and three injected fraud scenarios. Runtime: ~10 seconds.
 
 **Step 3 — Open the dashboard**
-```
-Open fraud_watch_dashboard.html in any modern browser (Chrome, Firefox, Safari, Edge).
-No server, no build step — the JSON data is embedded directly in the HTML file.
-```
+
+Open `fraud_watch_dashboard.html` in any modern browser (Chrome, Firefox, Safari, Edge). No server, no build step — the JSON data is embedded directly in the HTML file.
 
 ---
 
@@ -103,6 +101,7 @@ No server, no build step — the JSON data is embedded directly in the HTML file
 - **Anomaly detection:** Rule-based heuristics compare current fraud rate to a rolling 7-day baseline per channel/region/segment; deviations >3.5x baseline trigger Critical alerts, >2x trigger Elevated
 - **Frontend:** Vanilla JS + Chart.js 4.4 reading pre-aggregated JSON embedded in the HTML; five interactive pages with a shared case-view modal
 - **No backend required:** Static single-file HTML — shareable by email, hostable on GitHub Pages, or embedded in a Confluence wiki
+- **Risk score formula:** `risk_score = amount_weight + channel_risk_weight + geo_deviation + segment_multiplier + scenario_flag_bonus` (0–100 scale; weights tuned so card-testing micro-txns in high-risk geographies score 85+, normal domestic transactions score <20)
 
 ---
 
