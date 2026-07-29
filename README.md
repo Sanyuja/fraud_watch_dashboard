@@ -134,4 +134,4 @@ About 1,200 fraudulent call-center transactions targeting newly onboarded custom
 
 ## License
 
-MIT
+All rights reserved. This is a personal/portfolio project, not licensed for reuse or redistribution.
